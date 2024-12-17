@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Scan, ArrowRight, Loader2 } from 'lucide-react';
-import { findMatchByCupidId } from '../../services/matchingService';
+import { matchingService } from '../../services/matchingService';
 import { findProfileByUsername } from '../../services/profileStorage';
 import CompatibilityCard from '../compatibility/CompatibilityCard';
 import CompatibilityInsights from '../compatibility/CompatibilityInsights';
@@ -16,40 +16,15 @@ const ProfileScanner = () => {
   const [matchedProfile, setMatchedProfile] = useState<MatchedProfile | null>(null);
   const [showInsights, setShowInsights] = useState(false);
 
-  const handleScan = async () => {
-    if (!searchQuery.trim()) {
-      setError('Please enter a CUPID ID or username');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
+  const handleScan = async (cupidId: string) => {
     try {
-      let profile;
-      if (searchQuery.startsWith('CUPID-')) {
-        profile = await findMatchByCupidId(searchQuery);
-      } else {
-        const foundProfile = findProfileByUsername(searchQuery);
-        if (foundProfile) {
-          profile = await findMatchByCupidId(foundProfile.cupidId);
-        }
-      }
-
-      if (profile) {
-        setMatchedProfile(profile);
-      } else {
-        setError('No registered user found with this CUPID ID or username');
-      }
-    } catch (error: any) {
-      if (error.message === 'Please complete your personality analysis first') {
-        setError('Please complete your personality analysis before scanning profiles');
-        setTimeout(() => {
-          navigate('/personality-analysis');
-        }, 2000);
-      } else {
-        setError(error.message || 'Error scanning profile');
-      }
+      setLoading(true);
+      setError(null);
+      const match = await matchingService.findMatchByCupidId(user!.id, cupidId);
+      onMatchFound(match);
+    } catch (err) {
+      console.error('Error scanning profile:', err);
+      setError('Failed to find profile. Please check the CUPID ID and try again.');
     } finally {
       setLoading(false);
     }

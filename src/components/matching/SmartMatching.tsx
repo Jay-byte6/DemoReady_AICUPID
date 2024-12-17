@@ -1,176 +1,105 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { profileService } from '../../services/supabaseService';
-import type { SmartMatch, UserProfile } from '../../types';
-import { Heart, MessageCircle, Eye, Star, AlertCircle } from 'lucide-react';
+import { matchingService } from '../../services/matchingService';
+import { SmartMatch } from '../../types';
+import { supabase } from '../../lib/supabase';
 
-interface SmartMatchingProps {
-  onViewCompatibility: (match: SmartMatch) => void;
-}
-
-const SmartMatching: React.FC<SmartMatchingProps> = ({ onViewCompatibility }) => {
+export const SmartMatching: React.FC = () => {
   const { user } = useAuth();
+  const [matches, setMatches] = useState<SmartMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [matches, setMatches] = useState<SmartMatch[]>([]);
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [showLowMatches, setShowLowMatches] = useState(false);
 
   useEffect(() => {
-    loadMatches();
+    if (user) {
+      loadMatches();
+    }
   }, [user]);
 
   const loadMatches = async () => {
-    if (!user) return;
-
     try {
       setLoading(true);
       setError(null);
-
-      // Load favorites first
-      const userFavorites = await profileService.getFavoriteProfiles(user.id);
-      setFavorites(userFavorites.map(f => f.favorite_user_id));
-
-      // Load matches
-      const matchResults = await profileService.findTopMatches(user.id, 20);
       
-      // Transform results into SmartMatch format
-      const smartMatches: SmartMatch[] = matchResults.map(result => ({
-        profile: result.user,
-        compatibility_score: result.compatibility.compatibility_score,
-        compatibility_details: {
-          strengths: result.compatibility.strengths || [],
-          challenges: result.compatibility.challenges || [],
-          tips: result.compatibility.improvement_tips || [],
-          long_term_prediction: result.compatibility.long_term_prediction || ''
-        },
-        is_favorite: userFavorites.some(f => f.favorite_user_id === result.user.user_id)
-      }));
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
 
-      setMatches(smartMatches);
-    } catch (err: any) {
+      const matchResults = await matchingService.findCompatibleMatches(user.id);
+      setMatches(matchResults);
+    } catch (err) {
       console.error('Error loading matches:', err);
-      setError(err.message || 'Failed to load matches');
+      setError(err instanceof Error ? err.message : 'Failed to load matches');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleToggleFavorite = async (matchId: string) => {
-    if (!user) return;
-
+  const toggleFavorite = async (matchId: string, isFavorite: boolean) => {
     try {
-      if (favorites.includes(matchId)) {
-        await profileService.removeFavoriteProfile(user.id, matchId);
-        setFavorites(prev => prev.filter(id => id !== matchId));
-      } else {
-        if (favorites.length >= 5) {
-          alert('You can only have up to 5 favorite profiles. Please remove one before adding another.');
-          return;
-        }
-        await profileService.addFavoriteProfile(user.id, matchId);
-        setFavorites(prev => [...prev, matchId]);
-      }
+      if (!user) return;
 
-      // Update matches to reflect favorite status
-      setMatches(prev => prev.map(match => 
-        match.profile.user_id === matchId 
-          ? { ...match, is_favorite: !match.is_favorite }
-          : match
-      ));
-    } catch (err: any) {
+      const { error } = await supabase
+        .from('favorite_profiles')
+        .upsert(
+          {
+            user_id: user.id,
+            favorite_user_id: matchId,
+            created_at: new Date().toISOString()
+          },
+          {
+            onConflict: 'user_id,favorite_user_id'
+          }
+        );
+
+      if (error) throw error;
+
+      setMatches(prev =>
+        prev.map(match =>
+          match.profile.id === matchId
+            ? { ...match, is_favorite: isFavorite }
+            : match
+        )
+      );
+    } catch (err) {
       console.error('Error toggling favorite:', err);
-      alert('Failed to update favorite status');
-    }
-  };
-
-  const handleRequestPersonaView = async (matchId: string) => {
-    if (!user) return;
-
-    try {
-      await profileService.createMatchRequest(user.id, matchId, 'PERSONA_VIEW');
-      // Update match status
-      setMatches(prev => prev.map(match => 
-        match.profile.user_id === matchId 
-          ? { 
-              ...match, 
-              request_status: { 
-                ...match.request_status,
-                persona_view: 'PENDING'
-              }
-            }
-          : match
-      ));
-    } catch (err: any) {
-      console.error('Error requesting persona view:', err);
-      alert('Failed to send persona view request');
-    }
-  };
-
-  const handleRequestChat = async (matchId: string) => {
-    if (!user) return;
-
-    try {
-      await profileService.createMatchRequest(user.id, matchId, 'CHAT');
-      // Update match status
-      setMatches(prev => prev.map(match => 
-        match.profile.user_id === matchId 
-          ? { 
-              ...match, 
-              request_status: { 
-                ...match.request_status,
-                chat: 'PENDING'
-              }
-            }
-          : match
-      ));
-    } catch (err: any) {
-      console.error('Error requesting chat:', err);
-      alert('Failed to send chat request');
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 text-red-700 rounded-lg">
-        {error}
-      </div>
-    );
-  }
-
-  if (matches.length === 0 && !showLowMatches) {
-    return (
-      <div className="text-center py-8">
-        <AlertCircle className="mx-auto h-12 w-12 text-yellow-500 mb-4" />
-        <h3 className="text-lg font-semibold mb-2">No High Compatibility Matches Found</h3>
-        <p className="text-gray-600 mb-4">
-          Would you like to see profiles with lower compatibility scores?
-        </p>
+      <div className="text-center p-4">
+        <p className="text-red-600">{error}</p>
         <button
-          onClick={() => setShowLowMatches(true)}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+          onClick={loadMatches}
+          className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
         >
-          Show All Profiles
+          Retry
         </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-6">Smart Matches</h1>
+      
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {matches.map(match => (
-          <div key={match.profile.user_id} className="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div
+            key={match.profile.id}
+            className="bg-white rounded-lg shadow-lg overflow-hidden"
+          >
             {/* Profile Image */}
-            <div className="relative h-48 bg-gray-200">
+            <div className="h-48 bg-gray-200">
               {match.profile.profile_image ? (
                 <img
                   src={match.profile.profile_image}
@@ -178,70 +107,65 @@ const SmartMatching: React.FC<SmartMatchingProps> = ({ onViewCompatibility }) =>
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400">
-                  No Image
+                <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                  <span className="text-gray-400">No image</span>
                 </div>
               )}
-              <div className="absolute top-2 right-2">
-                <button
-                  onClick={() => handleToggleFavorite(match.profile.user_id)}
-                  className={`p-2 rounded-full ${
-                    match.is_favorite ? 'bg-pink-500 text-white' : 'bg-white text-gray-400'
-                  }`}
-                >
-                  <Heart className="h-5 w-5" />
-                </button>
-              </div>
             </div>
 
             {/* Profile Info */}
             <div className="p-4">
               <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h3 className="font-semibold text-lg">
-                    {match.profile.fullname || 'Anonymous'}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    CUPID ID: {match.profile.cupid_id}
-                  </p>
+                <h2 className="text-xl font-semibold">
+                  {match.profile.fullname || 'Anonymous'}
+                </h2>
+                <span className="bg-indigo-100 text-indigo-800 text-sm px-2 py-1 rounded">
+                  {Math.round(match.compatibility_score)}% Match
+                </span>
+              </div>
+
+              <p className="text-gray-600 mb-4">
+                {match.profile.location || 'Location not specified'}
+              </p>
+
+              {/* Quick Insights */}
+              <div className="space-y-2 mb-4">
+                <div className="text-sm">
+                  <span className="font-medium">Age:</span>{' '}
+                  {match.profile.age || 'Not specified'}
                 </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-indigo-600">
-                    {Math.round(match.compatibility_score)}%
-                  </div>
-                  <div className="text-xs text-gray-500">Compatibility</div>
+                <div className="text-sm">
+                  <span className="font-medium">Occupation:</span>{' '}
+                  {match.profile.occupation || 'Not specified'}
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex justify-between mt-4 space-x-2">
+              <div className="flex justify-between mt-4">
                 <button
-                  onClick={() => onViewCompatibility(match)}
-                  className="flex-1 bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-200"
+                  onClick={() => toggleFavorite(match.profile.id, !match.is_favorite)}
+                  className={`px-4 py-2 rounded ${
+                    match.is_favorite
+                      ? 'bg-pink-100 text-pink-700'
+                      : 'bg-gray-100 text-gray-700'
+                  } hover:bg-opacity-80 transition-colors`}
                 >
-                  View Match
+                  {match.is_favorite ? 'Favorited' : 'Add to Favorites'}
                 </button>
-                <button
-                  onClick={() => handleRequestPersonaView(match.profile.user_id)}
-                  disabled={match.request_status?.persona_view === 'PENDING'}
-                  className="flex items-center justify-center p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
-                >
-                  <Eye className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => handleRequestChat(match.profile.user_id)}
-                  disabled={match.request_status?.chat === 'PENDING'}
-                  className="flex items-center justify-center p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
-                >
-                  <MessageCircle className="h-5 w-5" />
+                <button className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors">
+                  View Profile
                 </button>
               </div>
             </div>
           </div>
         ))}
       </div>
+
+      {matches.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-gray-600">No matches found. Try adjusting your preferences.</p>
+        </div>
+      )}
     </div>
   );
-};
-
-export default SmartMatching; 
+}; 

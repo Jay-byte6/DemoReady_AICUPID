@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Users, AlertCircle, Loader2 } from 'lucide-react';
-import { findCompatibleMatches, findMatchByCupidId } from '../services/matchingService';
+import { matchingService } from '../../services/matchingService';
 import { isProfileComplete, getCurrentProfile } from '../services/profileStorage';
 import CompatibleProfiles from './compatibility/CompatibleProfiles';
 import CompatibilityInsights from './compatibility/CompatibilityInsights';
@@ -39,7 +39,7 @@ const SmartMatching = () => {
     setError(null);
     
     try {
-      const matches = await findCompatibleMatches(profile.cupidId);
+      const matches = await matchingService.findCompatibleMatches(profile.cupidId);
       setCompatibleProfiles(matches);
       setShowLowMatches(includeLowMatches);
     } catch (error: any) {
@@ -64,7 +64,7 @@ const SmartMatching = () => {
     setError(null);
 
     try {
-      const match = await findMatchByCupidId(cupidId);
+      const match = await matchingService.findMatchByCupidId(cupidId);
       if (match) {
         setSelectedProfile(match);
       } else {

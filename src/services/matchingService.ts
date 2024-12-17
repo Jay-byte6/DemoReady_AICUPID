@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { SmartMatch, UserProfile, CompatibilityDetails } from '../types';
 import { generatePersonaAnalysis } from './openai';
 
-export const findCompatibleMatches = async (userId: string): Promise<SmartMatch[]> => {
+const findCompatibleMatches = async (userId: string): Promise<SmartMatch[]> => {
   try {
     const { data: userProfile, error: profileError } = await supabase
       .from('user_profiles')
@@ -53,7 +53,7 @@ export const findCompatibleMatches = async (userId: string): Promise<SmartMatch[
   }
 };
 
-export const findMatchByCupidId = async (userId: string, cupidId: string): Promise<SmartMatch> => {
+const findMatchByCupidId = async (userId: string, cupidId: string): Promise<SmartMatch> => {
   try {
     const { data: match, error } = await supabase
       .from('user_profiles')
@@ -95,4 +95,15 @@ export const findMatchByCupidId = async (userId: string, cupidId: string): Promi
     console.error('Error finding match by CUPID ID:', error);
     throw error;
   }
+};
+
+const findTopMatches = async (userId: string): Promise<SmartMatch[]> => {
+  const matches = await findCompatibleMatches(userId);
+  return matches.sort((a, b) => b.compatibility_score - a.compatibility_score);
+};
+
+export const matchingService = {
+  findCompatibleMatches,
+  findMatchByCupidId,
+  findTopMatches
 };
