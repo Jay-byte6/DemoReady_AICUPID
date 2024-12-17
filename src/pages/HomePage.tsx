@@ -4,11 +4,23 @@ import { Heart, Sparkles, Users, Brain, ChevronRight, ArrowRight, MessageCircleH
 import CompatibilityCard from '../components/CompatibilityCard';
 import CompatibilityInsights from '../components/CompatibilityInsights';
 import ProfileScanner from '../components/ProfileScanner';
+import { useAuth } from '../contexts/AuthContext';
+import { SmartMatch } from '../types/SmartMatch';
 
-function HomePage() {
+const Home = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [showInsights, setShowInsights] = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState(null);
+  const [showCompatibilityModal, setShowCompatibilityModal] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState<SmartMatch | null>(null);
+
+  const handleViewInsights = (profile: SmartMatch) => {
+    setSelectedProfile(profile);
+    setShowCompatibilityModal(false);
+  };
+
+  const handleProfileScanned = (profile: SmartMatch) => {
+    setSelectedProfile(profile);
+  };
 
   const topMatches = [
     {
@@ -32,7 +44,7 @@ function HomePage() {
   ];
 
   return (
-    <main className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8">
       {/* Hero Section */}
       <div className="text-center mb-16">
         <div className="flex items-center justify-center mb-4">
@@ -70,17 +82,17 @@ function HomePage() {
       </div>
 
       {/* Profile Scanner */}
-      <ProfileScanner />
+      <ProfileScanner onProfileScanned={handleProfileScanned} />
 
       {/* Compatibility Insights Modal */}
-      {showInsights && selectedProfile && (
+      {selectedProfile && (
         <CompatibilityInsights
           profile={selectedProfile}
-          onClose={() => setShowInsights(false)}
+          onClose={() => setSelectedProfile(null)}
         />
       )}
-    </main>
+    </div>
   );
-}
+};
 
-export default HomePage;
+export default Home;

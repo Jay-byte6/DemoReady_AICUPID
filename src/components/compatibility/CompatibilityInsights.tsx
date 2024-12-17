@@ -1,13 +1,13 @@
 import React from 'react';
-import { MatchedProfile } from '../../types/profile';
+import { SmartMatch } from '../../types';
 
 interface CompatibilityInsightsProps {
-  profile: MatchedProfile;
+  profile: SmartMatch;
   onClose: () => void;
 }
 
 export const CompatibilityInsights: React.FC<CompatibilityInsightsProps> = ({ profile, onClose }) => {
-  const matchedProfile = profile.compatibility_details;
+  const details = profile.compatibility_details;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -39,7 +39,7 @@ export const CompatibilityInsights: React.FC<CompatibilityInsightsProps> = ({ pr
               Relationship Strengths
             </h3>
             <ul className="space-y-2">
-              {matchedProfile?.strengths?.map((strength, index) => (
+              {details.strengths.map((strength: string, index: number) => (
                 <li key={index} className="flex items-start">
                   <span className="text-green-500 mr-2">✓</span>
                   {strength}
@@ -54,7 +54,7 @@ export const CompatibilityInsights: React.FC<CompatibilityInsightsProps> = ({ pr
               Potential Challenges
             </h3>
             <ul className="space-y-2">
-              {matchedProfile?.challenges?.map((challenge, index) => (
+              {details.challenges.map((challenge: string, index: number) => (
                 <li key={index} className="flex items-start">
                   <span className="text-amber-500 mr-2">!</span>
                   {challenge}
@@ -69,7 +69,7 @@ export const CompatibilityInsights: React.FC<CompatibilityInsightsProps> = ({ pr
               Relationship Tips
             </h3>
             <ul className="space-y-2">
-              {matchedProfile?.tips?.map((tip, index) => (
+              {details.tips.map((tip: string, index: number) => (
                 <li key={index} className="flex items-start">
                   <span className="text-blue-500 mr-2">💡</span>
                   {tip}
@@ -84,7 +84,7 @@ export const CompatibilityInsights: React.FC<CompatibilityInsightsProps> = ({ pr
               Long-term Potential
             </h3>
             <p className="text-gray-700">
-              {matchedProfile?.long_term_prediction}
+              {details.long_term_prediction}
             </p>
           </div>
         </div>

@@ -1,6 +1,51 @@
 import { supabase } from '../lib/supabase';
 import { generatePersonaAnalysis, analyzeCompatibility } from './openai';
 
+export const analyzeCompatibilityByCupidId = async (userId: string, cupidId: string) => {
+  try {
+    // Get target profile
+    const { data: targetProfile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('cupid_id', cupidId)
+      .single();
+
+    if (profileError) throw profileError;
+
+    // Get user profile
+    const { data: userProfile, error: userError } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (userError) throw userError;
+
+    // Calculate compatibility
+    const compatibility = await generatePersonaAnalysis({
+      user1: userProfile,
+      user2: targetProfile
+    });
+
+    return {
+      targetProfile,
+      compatibility: {
+        score: compatibility.score || 0,
+        insights: compatibility.strengths || [],
+        details: {
+          strengths: compatibility.strengths || [],
+          challenges: compatibility.challenges || [],
+          tips: compatibility.tips || [],
+          long_term_prediction: compatibility.long_term_prediction || ''
+        }
+      }
+    };
+  } catch (error) {
+    console.error('Error analyzing compatibility:', error);
+    throw error;
+  }
+};
+
 export const profileService = {
   async getUserProfile(userId: string) {
     try {
@@ -841,7 +886,9 @@ export const profileService = {
       console.error('Error updating relationship status:', error);
       throw error;
     }
-  }
+  },
+
+  analyzeCompatibilityByCupidId
 };
 
 export default profileService; 

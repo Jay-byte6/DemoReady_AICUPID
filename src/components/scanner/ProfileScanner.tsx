@@ -1,20 +1,21 @@
 import React, { useState } from 'react';
 import { Search, Scan, ArrowRight, Loader2 } from 'lucide-react';
 import { matchingService } from '../../services/matchingService';
-import { findProfileByUsername } from '../../services/profileStorage';
 import { CompatibilityInsights } from '../compatibility/CompatibilityInsights';
 import ErrorAlert from '../ErrorAlert';
-import { MatchedProfile } from '../../types/profile';
-import { useNavigate } from 'react-router-dom';
+import { SmartMatch } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 
-const ProfileScanner = () => {
-  const navigate = useNavigate();
+interface ProfileScannerProps {
+  onProfileScanned?: (profile: SmartMatch) => void;
+}
+
+const ProfileScanner: React.FC<ProfileScannerProps> = ({ onProfileScanned }) => {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [matchedProfile, setMatchedProfile] = useState<MatchedProfile | null>(null);
+  const [matchedProfile, setMatchedProfile] = useState<SmartMatch | null>(null);
   const [showInsights, setShowInsights] = useState(false);
 
   const handleScan = async () => {
@@ -33,6 +34,9 @@ const ProfileScanner = () => {
       setError(null);
       const match = await matchingService.findMatchByCupidId(user.id, searchQuery);
       setMatchedProfile(match);
+      if (onProfileScanned) {
+        onProfileScanned(match);
+      }
       setShowInsights(true);
     } catch (err) {
       console.error('Error scanning profile:', err);

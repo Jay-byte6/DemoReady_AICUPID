@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Users, AlertCircle, Loader2 } from 'lucide-react';
 import { matchingService } from '../services/matchingService';
 import { isProfileComplete, getCurrentProfile } from '../services/profileStorage';
-import CompatibleProfiles from './compatibility/CompatibleProfiles';
-import CompatibilityInsights from './compatibility/CompatibilityInsights';
+import { CompatibilityInsights } from './compatibility/CompatibilityInsights';
 import ErrorAlert from './ErrorAlert';
-import { MatchedProfile } from '../types/profile';
+import { SmartMatch } from '../types';
 
 const SmartMatching = () => {
   const navigate = useNavigate();
@@ -15,8 +14,8 @@ const SmartMatching = () => {
   const [showLowMatches, setShowLowMatches] = useState(false);
   const [showCupidIdSearch, setShowCupidIdSearch] = useState(false);
   const [cupidId, setCupidId] = useState('');
-  const [selectedProfile, setSelectedProfile] = useState<MatchedProfile | null>(null);
-  const [compatibleProfiles, setCompatibleProfiles] = useState<MatchedProfile[]>([]);
+  const [selectedProfile, setSelectedProfile] = useState<SmartMatch | null>(null);
+  const [compatibleProfiles, setCompatibleProfiles] = useState<SmartMatch[]>([]);
 
   useEffect(() => {
     const profile = getCurrentProfile();
