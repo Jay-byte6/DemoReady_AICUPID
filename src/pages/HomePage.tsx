@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, Sparkles, Users, Brain, ChevronRight, ArrowRight, MessageCircleHeart, Crown } from 'lucide-react';
 import CompatibilityCard from '../components/CompatibilityCard';
-import CompatibilityInsights from '../components/CompatibilityInsights';
+import CompatibilityInsights from '../components/compatibility/CompatibilityInsights';
 import ProfileScanner from '../components/ProfileScanner';
 import { useAuth } from '../contexts/AuthContext';
 import { SmartMatch } from '../types';

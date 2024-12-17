@@ -42,20 +42,46 @@ export interface Profile {
     customDealbreakers?: string;
     dealbreakersFlexibility: string;
   };
+  createdAt: string;
+  lastUpdated: string;
 }
 
 export interface CompatibilityScore {
-  overall: number;
-  emotional: number;
-  intellectual: number;
-  lifestyle: number;
+  score: number;
+  insights: string[];
   details: {
     strengths: string[];
     challenges: string[];
+    tips: string[];
+    long_term_prediction: string;
   };
+  overall?: number;
+  emotional?: number;
+  intellectual?: number;
+  lifestyle?: number;
 }
 
 export interface MatchedProfile extends Profile {
   compatibility: CompatibilityScore;
   image: string;
+  strengths?: string[];
+  challenges?: string[];
+}
+
+export interface SmartMatch {
+  profile: Profile;
+  compatibility_score: number;
+  compatibility_details: {
+    strengths: string[];
+    challenges: string[];
+    tips: string[];
+    long_term_prediction: string;
+  };
+  request_status?: string;
+  is_favorite?: boolean;
+}
+
+export interface CompatibilityInsightsProps {
+  profile: SmartMatch;
+  onClose: () => void;
 }

@@ -65,7 +65,7 @@ export async function testPersonaGeneration(userId: string) {
     
     // Generate positive AI persona
     console.log("Generating positive AI persona...");
-    const aiPersona = await generateAIPersona(sampleProfile, sampleAnalysis);
+    const aiPersona = await generateAIPersona(sampleProfile);
     
     if (!aiPersona) {
       throw new Error('Generated AI persona is empty');
@@ -75,7 +75,7 @@ export async function testPersonaGeneration(userId: string) {
 
     // Generate negative AI persona
     console.log("Generating negative AI persona...");
-    const negativePersona = await generateNegativePersona(sampleProfile, sampleAnalysis);
+    const negativePersona = await generateNegativePersona(sampleProfile);
 
     if (!negativePersona) {
       throw new Error('Generated negative persona is empty');

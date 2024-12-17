@@ -16,34 +16,46 @@ const ProfileScanner: React.FC<ProfileScannerProps> = ({ onProfileScanned }) => 
       const mockProfile: Profile = {
         cupidId: 'MOCK123',
         personalInfo: {
-          fullname: 'John Doe',
+          fullName: 'John Doe',
           age: 30,
           gender: 'Male',
           location: 'New York',
           occupation: 'Software Engineer',
-          relationship_history: 'Single',
+          relationshipHistory: 'Single',
           lifestyle: 'Active'
         },
         preferences: {
-          ageRange: { min: 25, max: 35 },
-          location: 'Urban',
-          lifestyle: ['Active', 'Social']
+          interests: ['Technology', 'Travel', 'Music'],
+          minAge: 25,
+          maxAge: 35,
+          preferredDistance: 'Urban',
+          educationPreference: 'Social'
         },
         psychologicalProfile: {
-          personality: 'INFJ',
-          traits: ['Empathetic', 'Creative', 'Analytical']
-        },
-        relationshipGoals: {
-          type: 'Long-term',
-          priorities: ['Trust', 'Communication', 'Growth']
-        },
-        behavioralInsights: {
+          extroversion: 0,
+          openness: 0,
+          agreeableness: 0,
+          conscientiousness: 0,
+          emotionalStability: 0,
           communicationStyle: 'Direct',
           conflictResolution: 'Collaborative'
         },
+        relationshipGoals: {
+          relationshipType: 'Long-term',
+          timeline: 'Growth',
+          familyPlans: 'Trust',
+          relationshipValues: 'Communication'
+        },
+        behavioralInsights: {
+          loveLanguage: 'Direct',
+          socialBattery: 'Active',
+          stressResponse: 'Collaborative',
+          decisionMaking: 'Collaborative'
+        },
         dealbreakers: {
-          absolute: ['Dishonesty', 'Lack of ambition'],
-          flexible: ['Distance', 'Different interests']
+          dealbreakers: ['Dishonesty', 'Lack of ambition'],
+          customDealbreakers: [],
+          dealbreakersFlexibility: 'Distance'
         },
         interests: ['Technology', 'Travel', 'Music'],
         personalityTraits: ['Introverted', 'Creative', 'Ambitious']

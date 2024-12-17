@@ -20,6 +20,15 @@ const steps = [
   { id: 6, name: 'Dealbreakers', key: 'dealbreakers' }
 ];
 
+interface ProfileSections {
+  personalInfo: Record<string, any>;
+  preferences: Record<string, any>;
+  psychologicalProfile: Record<string, any>;
+  relationshipGoals: Record<string, any>;
+  behavioralInsights: Record<string, any>;
+  dealbreakers: Record<string, any>;
+}
+
 const PersonalityAnalysis = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -28,7 +37,8 @@ const PersonalityAnalysis = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
+  const [currentSection, setCurrentSection] = useState<keyof ProfileSections>('personalInfo');
+  const [profile, setProfile] = useState<ProfileSections>({
     personalInfo: {},
     preferences: {},
     psychologicalProfile: {},
@@ -49,7 +59,7 @@ const PersonalityAnalysis = () => {
         // Load user profile
         const userProfile = await profileService.getUserProfile(user.id);
         if (userProfile) {
-          setFormData(prev => ({
+          setProfile(prev => ({
             ...prev,
             personalInfo: userProfile
           }));
@@ -58,7 +68,7 @@ const PersonalityAnalysis = () => {
         // Load personality analysis
         const analysis = await profileService.getPersonalityAnalysis(user.id);
         if (analysis) {
-          setFormData(prev => ({
+          setProfile(prev => ({
             ...prev,
             preferences: analysis.preferences || {},
             psychologicalProfile: analysis.psychological_profile || {},
@@ -79,11 +89,10 @@ const PersonalityAnalysis = () => {
   }, [user]);
 
   const validateCurrentSection = () => {
-    const currentSection = steps[currentStep - 1];
-    const sectionData = formData[currentSection.key as keyof typeof formData];
+    const currentSectionData = profile[currentSection];
     
-    if (!sectionData || Object.keys(sectionData).length === 0) {
-      setError(`Please complete all fields in ${currentSection.name}`);
+    if (!currentSectionData || Object.keys(currentSectionData).length === 0) {
+      setError(`Please complete all fields in ${currentSection}`);
       return false;
     }
     return true;
@@ -96,26 +105,24 @@ const PersonalityAnalysis = () => {
       setIsSaving(true);
       setError(null);
 
-      const currentSection = steps[currentStep - 1];
-
-      if (currentSection.key === 'personalInfo') {
+      if (currentSection === 'personalInfo') {
         // Update user profile
         await profileService.updateUserProfile(user.id, {
-          ...formData.personalInfo,
+          ...profile.personalInfo,
           updated_at: new Date().toISOString()
         });
       } else {
         // Save current section to personality analysis
         const analysisData: any = {};
-        const dbKey = currentSection.key === 'psychologicalProfile' 
+        const dbKey = currentSection === 'psychologicalProfile' 
           ? 'psychological_profile' 
-          : currentSection.key === 'relationshipGoals'
+          : currentSection === 'relationshipGoals'
           ? 'relationship_goals'
-          : currentSection.key === 'behavioralInsights'
+          : currentSection === 'behavioralInsights'
           ? 'behavioral_insights'
-          : currentSection.key;
+          : currentSection;
         
-        analysisData[dbKey] = formData[currentSection.key as keyof typeof formData];
+        analysisData[dbKey] = profile[currentSection];
 
         await profileService.savePersonalityAnalysis(user.id, {
           ...analysisData,
@@ -181,7 +188,7 @@ const PersonalityAnalysis = () => {
   };
 
   const updateFormData = (section: string, data: any) => {
-    setFormData(prev => ({
+    setProfile(prev => ({
       ...prev,
       [section]: { ...prev[section], ...data }
     }));
@@ -191,17 +198,17 @@ const PersonalityAnalysis = () => {
   const renderStep = () => {
     switch (currentStep) {
       case 1:
-        return <PersonalInfo data={formData.personalInfo} updateData={(data) => updateFormData('personalInfo', data)} />;
+        return <PersonalInfo data={profile.personalInfo} updateData={(data) => updateFormData('personalInfo', data)} />;
       case 2:
-        return <Preferences data={formData.preferences} updateData={(data) => updateFormData('preferences', data)} />;
+        return <Preferences data={profile.preferences} updateData={(data) => updateFormData('preferences', data)} />;
       case 3:
-        return <PsychologicalProfile data={formData.psychologicalProfile} updateData={(data) => updateFormData('psychologicalProfile', data)} />;
+        return <PsychologicalProfile data={profile.psychologicalProfile} updateData={(data) => updateFormData('psychologicalProfile', data)} />;
       case 4:
-        return <RelationshipGoals data={formData.relationshipGoals} updateData={(data) => updateFormData('relationshipGoals', data)} />;
+        return <RelationshipGoals data={profile.relationshipGoals} updateData={(data) => updateFormData('relationshipGoals', data)} />;
       case 5:
-        return <BehavioralInsights data={formData.behavioralInsights} updateData={(data) => updateFormData('behavioralInsights', data)} />;
+        return <BehavioralInsights data={profile.behavioralInsights} updateData={(data) => updateFormData('behavioralInsights', data)} />;
       case 6:
-        return <Dealbreakers data={formData.dealbreakers} updateData={(data) => updateFormData('dealbreakers', data)} />;
+        return <Dealbreakers data={profile.dealbreakers} updateData={(data) => updateFormData('dealbreakers', data)} />;
       default:
         return null;
     }

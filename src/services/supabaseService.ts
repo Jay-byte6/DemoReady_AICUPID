@@ -888,7 +888,26 @@ export const profileService = {
     }
   },
 
-  analyzeCompatibilityByCupidId
+  analyzeCompatibilityByCupidId,
+
+  async addDealbreaker(userId: string, dealBreaker: string) {
+    try {
+      const { data, error } = await supabase
+        .from('dealbreakers')
+        .insert([
+          {
+            user_id: userId,
+            dealbreaker: dealBreaker
+          }
+        ]);
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error adding dealbreaker:', error);
+      throw error;
+    }
+  }
 };
 
 export default profileService; 
