@@ -10,6 +10,8 @@ export interface CompatibilityScore {
   emotional: number;
   intellectual: number;
   lifestyle: number;
+  score: number;
+  insights: string[];
   details: CompatibilityDetails;
 }
 
@@ -64,6 +66,8 @@ export interface Profile {
 export interface MatchedProfile extends Profile {
   compatibility: CompatibilityScore;
   image: string;
+  strengths?: string[];
+  challenges?: string[];
 }
 
 export interface AIPersona {
@@ -172,7 +176,7 @@ export interface SmartMatch {
   profile: UserProfile;
   compatibility_score: number;
   compatibility_details: CompatibilityDetails;
-  request_status?: {
+  request_status: {
     persona_view: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
     chat: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
   };

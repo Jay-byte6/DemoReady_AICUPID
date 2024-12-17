@@ -11,12 +11,17 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5174,
+    port: 5175,
     host: true,
     open: true,
   },
   define: {
     // This is needed for OpenAI to work in the browser
     global: 'globalThis',
+    'process.env': {}
   },
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+  }
 });
