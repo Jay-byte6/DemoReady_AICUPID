@@ -1,106 +1,96 @@
 import React from 'react';
-import { MatchedProfile, CompatibilityDetails } from '../../types';
+import { MatchedProfile } from '../../types/profile';
 
 interface CompatibilityInsightsProps {
-  matchedProfile: MatchedProfile;
-  onClose?: () => void;
+  profile: MatchedProfile;
+  onClose: () => void;
 }
 
-export const CompatibilityInsights: React.FC<CompatibilityInsightsProps> = ({
-  matchedProfile,
-  onClose
-}) => {
-  const { compatibility } = matchedProfile;
-  const details = compatibility.details;
+export const CompatibilityInsights: React.FC<CompatibilityInsightsProps> = ({ profile, onClose }) => {
+  const matchedProfile = profile.compatibility_details;
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6 max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold mb-4">Compatibility Analysis</h2>
-        
-        {/* Compatibility Scores */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-indigo-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-indigo-800">Overall</h3>
-            <p className="text-2xl font-bold text-indigo-600">
-              {Math.round(compatibility.overall)}%
-            </p>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">Compatibility Insights</h2>
+            <button
+              onClick={onClose}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              ×
+            </button>
           </div>
-          <div className="bg-pink-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-pink-800">Emotional</h3>
-            <p className="text-2xl font-bold text-pink-600">
-              {Math.round(compatibility.emotional)}%
-            </p>
-          </div>
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-blue-800">Intellectual</h3>
-            <p className="text-2xl font-bold text-blue-600">
-              {Math.round(compatibility.intellectual)}%
-            </p>
-          </div>
-          <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-green-800">Lifestyle</h3>
-            <p className="text-2xl font-bold text-green-600">
-              {Math.round(compatibility.lifestyle)}%
-            </p>
-          </div>
-        </div>
 
-        {/* Strengths */}
-        <div className="mb-6">
-          <h3 className="text-xl font-semibold mb-3">Relationship Strengths</h3>
-          <div className="bg-green-50 p-4 rounded-lg">
-            <ul className="list-disc pl-5 space-y-2">
-              {details.strengths.map((strength: string, index: number) => (
-                <li key={index} className="text-green-800">{strength}</li>
+          {/* Compatibility Score */}
+          <div className="mb-8 text-center">
+            <div className="inline-block bg-indigo-100 rounded-full p-4">
+              <div className="text-3xl font-bold text-indigo-600">
+                {Math.round(profile.compatibility_score)}%
+              </div>
+              <div className="text-sm text-indigo-800">Compatibility</div>
+            </div>
+          </div>
+
+          {/* Strengths */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-3 text-green-600">
+              Relationship Strengths
+            </h3>
+            <ul className="space-y-2">
+              {matchedProfile?.strengths?.map((strength, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="text-green-500 mr-2">✓</span>
+                  {strength}
+                </li>
               ))}
             </ul>
           </div>
-        </div>
 
-        {/* Challenges */}
-        <div className="mb-6">
-          <h3 className="text-xl font-semibold mb-3">Potential Challenges</h3>
-          <div className="bg-red-50 p-4 rounded-lg">
-            <ul className="list-disc pl-5 space-y-2">
-              {details.challenges.map((challenge: string, index: number) => (
-                <li key={index} className="text-red-800">{challenge}</li>
+          {/* Challenges */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-3 text-amber-600">
+              Potential Challenges
+            </h3>
+            <ul className="space-y-2">
+              {matchedProfile?.challenges?.map((challenge, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="text-amber-500 mr-2">!</span>
+                  {challenge}
+                </li>
               ))}
             </ul>
           </div>
-        </div>
 
-        {/* Long-term Prediction */}
-        <div className="mb-6">
-          <h3 className="text-xl font-semibold mb-3">Long-term Prediction</h3>
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <p className="text-blue-800">{details.long_term_prediction}</p>
-          </div>
-        </div>
-
-        {/* Improvement Tips */}
-        <div>
-          <h3 className="text-xl font-semibold mb-3">Tips for Success</h3>
-          <div className="bg-indigo-50 p-4 rounded-lg">
-            <ul className="list-disc pl-5 space-y-2">
-              {details.tips.map((tip: string, index: number) => (
-                <li key={index} className="text-indigo-800">{tip}</li>
+          {/* Tips */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold mb-3 text-blue-600">
+              Relationship Tips
+            </h3>
+            <ul className="space-y-2">
+              {matchedProfile?.tips?.map((tip, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="text-blue-500 mr-2">💡</span>
+                  {tip}
+                </li>
               ))}
             </ul>
+          </div>
+
+          {/* Long-term Prediction */}
+          <div>
+            <h3 className="text-lg font-semibold mb-3 text-purple-600">
+              Long-term Potential
+            </h3>
+            <p className="text-gray-700">
+              {matchedProfile?.long_term_prediction}
+            </p>
           </div>
         </div>
       </div>
-
-      {onClose && (
-        <div className="flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
-          >
-            Close
-          </button>
-        </div>
-      )}
     </div>
   );
 };
+
+export default CompatibilityInsights;

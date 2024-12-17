@@ -2,26 +2,38 @@ import React, { useState } from 'react';
 import { Search, Scan, ArrowRight, Loader2 } from 'lucide-react';
 import { matchingService } from '../../services/matchingService';
 import { findProfileByUsername } from '../../services/profileStorage';
-import CompatibilityCard from '../compatibility/CompatibilityCard';
-import CompatibilityInsights from '../compatibility/CompatibilityInsights';
+import { CompatibilityInsights } from '../compatibility/CompatibilityInsights';
 import ErrorAlert from '../ErrorAlert';
 import { MatchedProfile } from '../../types/profile';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 const ProfileScanner = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [matchedProfile, setMatchedProfile] = useState<MatchedProfile | null>(null);
   const [showInsights, setShowInsights] = useState(false);
 
-  const handleScan = async (cupidId: string) => {
+  const handleScan = async () => {
+    if (!searchQuery.trim()) {
+      setError('Please enter a CUPID ID');
+      return;
+    }
+
+    if (!user) {
+      setError('Please log in to scan profiles');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
-      const match = await matchingService.findMatchByCupidId(user!.id, cupidId);
-      onMatchFound(match);
+      const match = await matchingService.findMatchByCupidId(user.id, searchQuery);
+      setMatchedProfile(match);
+      setShowInsights(true);
     } catch (err) {
       console.error('Error scanning profile:', err);
       setError('Failed to find profile. Please check the CUPID ID and try again.');
@@ -39,7 +51,7 @@ const ProfileScanner = () => {
         </div>
         
         <p className="text-center text-gray-600 mb-8">
-          Enter a CUPID ID or username to get instant compatibility insights
+          Enter a CUPID ID to get instant compatibility insights
         </p>
         
         {error && <ErrorAlert message={error} onClose={() => setError(null)} />}
@@ -51,7 +63,7 @@ const ProfileScanner = () => {
           <input
             type="text"
             className="block w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder="Enter CUPID ID or username..."
+            placeholder="Enter CUPID ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyPress={(e) => {
@@ -78,15 +90,6 @@ const ProfileScanner = () => {
             )}
           </button>
         </div>
-
-        {matchedProfile && (
-          <div className="mt-8">
-            <CompatibilityCard
-              profile={matchedProfile}
-              onViewInsights={() => setShowInsights(true)}
-            />
-          </div>
-        )}
 
         {showInsights && matchedProfile && (
           <CompatibilityInsights

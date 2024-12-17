@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Users, AlertCircle, Loader2 } from 'lucide-react';
-import { matchingService } from '../../services/matchingService';
+import { matchingService } from '../services/matchingService';
 import { isProfileComplete, getCurrentProfile } from '../services/profileStorage';
 import CompatibleProfiles from './compatibility/CompatibleProfiles';
 import CompatibilityInsights from './compatibility/CompatibilityInsights';
