@@ -6,13 +6,13 @@ export interface CompatibilityDetails {
 }
 
 export interface CompatibilityScore {
-  overall: number;
-  emotional: number;
-  intellectual: number;
-  lifestyle: number;
   score: number;
   insights: string[];
   details: CompatibilityDetails;
+  overall?: number;
+  emotional?: number;
+  intellectual?: number;
+  lifestyle?: number;
 }
 
 export interface Profile {

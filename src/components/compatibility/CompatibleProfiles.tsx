@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Heart } from 'lucide-react';
 import CompatibilityCard from './CompatibilityCard';
-import CompatibilityInsights from './CompatibilityInsights';
-import { MatchedProfile } from '../../types/profile';
+import { CompatibilityInsights } from './CompatibilityInsights';
+import { SmartMatch } from '../../types';
 
 interface Props {
-  profiles: MatchedProfile[];
+  profiles: SmartMatch[];
   onBack: () => void;
 }
 
 const CompatibleProfiles: React.FC<Props> = ({ profiles, onBack }) => {
-  const [selectedProfile, setSelectedProfile] = useState<MatchedProfile | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<SmartMatch | null>(null);
   const [likedProfiles, setLikedProfiles] = useState<Set<string>>(new Set());
 
   const handleLike = (profileId: string, liked: boolean) => {
@@ -44,11 +44,11 @@ const CompatibleProfiles: React.FC<Props> = ({ profiles, onBack }) => {
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {profiles.map((profile) => (
           <CompatibilityCard
-            key={profile.cupidId}
+            key={profile.profile.id}
             profile={profile}
             onViewInsights={() => setSelectedProfile(profile)}
-            isLiked={likedProfiles.has(profile.cupidId)}
-            onLike={(liked) => handleLike(profile.cupidId, liked)}
+            isLiked={likedProfiles.has(profile.profile.id)}
+            onLike={(liked) => handleLike(profile.profile.id, liked)}
           />
         ))}
       </div>

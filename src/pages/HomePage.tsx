@@ -5,7 +5,7 @@ import CompatibilityCard from '../components/CompatibilityCard';
 import CompatibilityInsights from '../components/CompatibilityInsights';
 import ProfileScanner from '../components/ProfileScanner';
 import { useAuth } from '../contexts/AuthContext';
-import { SmartMatch } from '../types/SmartMatch';
+import { SmartMatch } from '../types';
 
 const Home = () => {
   const { user } = useAuth();

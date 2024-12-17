@@ -122,24 +122,20 @@ const ChatModal: React.FC<ChatModalProps> = ({ partnerId, onClose }) => {
             <div
               key={index}
               className={`flex ${
-                message.sender_id === user?.id ? 'justify-end' : 'justify-start'
+                message.user_id === user?.id ? 'justify-end' : 'justify-start'
               }`}
             >
               <div
-                className={`max-w-[70%] rounded-lg p-3 ${
-                  message.sender_id === user?.id
+                className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                  message.user_id === user?.id
                     ? 'bg-indigo-600 text-white'
                     : 'bg-gray-100 text-gray-900'
                 }`}
               >
                 <p>{message.content}</p>
-                <p className={`text-xs mt-1 ${
-                  message.sender_id === user?.id
-                    ? 'text-indigo-200'
-                    : 'text-gray-500'
-                }`}>
+                <span className="text-xs opacity-75">
                   {new Date(message.created_at).toLocaleTimeString()}
-                </p>
+                </span>
               </div>
             </div>
           ))}

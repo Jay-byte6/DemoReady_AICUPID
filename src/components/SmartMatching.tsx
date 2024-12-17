@@ -16,6 +16,7 @@ const SmartMatching = () => {
   const [cupidId, setCupidId] = useState('');
   const [selectedProfile, setSelectedProfile] = useState<SmartMatch | null>(null);
   const [compatibleProfiles, setCompatibleProfiles] = useState<SmartMatch[]>([]);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
     const profile = getCurrentProfile();
@@ -54,7 +55,7 @@ const SmartMatching = () => {
   };
 
   const handleCupidIdSearch = async () => {
-    if (!cupidId.trim()) {
+    if (!cupidId.trim() || !user) {
       setError('Please enter a valid CUPID ID');
       return;
     }
@@ -63,7 +64,7 @@ const SmartMatching = () => {
     setError(null);
 
     try {
-      const match = await matchingService.findMatchByCupidId(cupidId);
+      const match = await matchingService.findMatchByCupidId(user.id, cupidId);
       if (match) {
         setSelectedProfile(match);
       } else {
