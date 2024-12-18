@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Search, Scan, ArrowRight, Loader2 } from 'lucide-react';
-import type { Profile } from '../types';
+import type { SmartMatch } from '../types';
 
 interface ProfileScannerProps {
-  onProfileScanned: (profile: Profile) => void;
+  onProfileScanned: (profile: SmartMatch) => void;
 }
 
 const ProfileScanner: React.FC<ProfileScannerProps> = ({ onProfileScanned }) => {
@@ -13,52 +13,36 @@ const ProfileScanner: React.FC<ProfileScannerProps> = ({ onProfileScanned }) => 
     setScanning(true);
     try {
       // Simulated scan result
-      const mockProfile: Profile = {
-        cupidId: 'MOCK123',
-        personalInfo: {
-          fullName: 'John Doe',
+      const mockProfile: SmartMatch = {
+        profile: {
+          id: '123',
+          user_id: '456',
+          cupid_id: 'CUPID123',
+          fullname: 'John Doe',
           age: 30,
-          gender: 'Male',
           location: 'New York',
+          gender: 'Male',
           occupation: 'Software Engineer',
-          relationshipHistory: 'Single',
-          lifestyle: 'Active'
+          relationship_history: 'Single',
+          lifestyle: 'Active',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          matching_preferences: null,
+          notification_preferences: null,
+          profile_image: null
         },
-        preferences: {
-          interests: ['Technology', 'Travel', 'Music'],
-          minAge: 25,
-          maxAge: 35,
-          preferredDistance: 'Urban',
-          educationPreference: 'Social'
+        compatibility_score: 85,
+        compatibility_details: {
+          strengths: ['Communication', 'Values'],
+          challenges: ['Distance'],
+          tips: ['Focus on building trust'],
+          long_term_prediction: 'Positive outlook'
         },
-        psychologicalProfile: {
-          extroversion: 0,
-          openness: 0,
-          agreeableness: 0,
-          conscientiousness: 0,
-          emotionalStability: 0,
-          communicationStyle: 'Direct',
-          conflictResolution: 'Collaborative'
+        request_status: {
+          persona_view: 'PENDING',
+          chat: 'NONE'
         },
-        relationshipGoals: {
-          relationshipType: 'Long-term',
-          timeline: 'Growth',
-          familyPlans: 'Trust',
-          relationshipValues: 'Communication'
-        },
-        behavioralInsights: {
-          loveLanguage: 'Direct',
-          socialBattery: 'Active',
-          stressResponse: 'Collaborative',
-          decisionMaking: 'Collaborative'
-        },
-        dealbreakers: {
-          dealbreakers: ['Dishonesty', 'Lack of ambition'],
-          customDealbreakers: [],
-          dealbreakersFlexibility: 'Distance'
-        },
-        interests: ['Technology', 'Travel', 'Music'],
-        personalityTraits: ['Introverted', 'Creative', 'Ambitious']
+        is_favorite: false
       };
 
       onProfileScanned(mockProfile);

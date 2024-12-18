@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Heart, Gift, Clock } from 'lucide-react';
-import { MatchedProfile } from '../types';
+import { SmartMatch } from '../types';
 
 interface CompatibilityInsightsProps {
-  matchedProfile: MatchedProfile;
+  profile: SmartMatch;
+  onClose: () => void;
 }
 
-const CompatibilityInsights: React.FC<CompatibilityInsightsProps> = ({ matchedProfile }) => {
+const CompatibilityInsights: React.FC<CompatibilityInsightsProps> = ({ profile, onClose }) => {
   const [activeTab, setActiveTab] = useState('strengths');
 
   return (
@@ -49,7 +50,7 @@ const CompatibilityInsights: React.FC<CompatibilityInsightsProps> = ({ matchedPr
             Relationship Strengths
           </h3>
           <ul className="space-y-3">
-            {matchedProfile.strengths.map((strength: string, index: number) => (
+            {profile?.compatibility_details?.strengths?.map((strength: string, index: number) => (
               <li
                 key={index}
                 className="flex items-start"
@@ -69,7 +70,7 @@ const CompatibilityInsights: React.FC<CompatibilityInsightsProps> = ({ matchedPr
             Potential Challenges
           </h3>
           <ul className="space-y-3">
-            {matchedProfile.challenges.map((challenge: string, index: number) => (
+            {profile?.compatibility_details?.challenges?.map((challenge: string, index: number) => (
               <li
                 key={index}
                 className="flex items-start"

@@ -94,17 +94,18 @@ export interface UserProfile {
   id: string;
   user_id: string;
   cupid_id: string;
-  fullname: string | null;
-  age: number | null;
-  gender: string | null;
-  location: string | null;
-  occupation: string | null;
-  relationship_history: string | null;
-  lifestyle: string | null;
-  profile_image: string | null;
+  fullname: string;
+  age: number;
+  location: string;
+  gender: string;
+  occupation: string;
+  relationship_history: string;
+  lifestyle: string;
   created_at: string;
   updated_at: string;
-  persona?: AIPersona;
+  matching_preferences: any | null;
+  notification_preferences: any | null;
+  profile_image: string | null;
 }
 
 export interface PersonaTrait {

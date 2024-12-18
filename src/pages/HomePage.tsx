@@ -20,6 +20,7 @@ const Home = () => {
 
   const handleProfileScanned = (profile: SmartMatch) => {
     setSelectedProfile(profile);
+    setShowCompatibilityModal(true);
   };
 
   const topMatches = [

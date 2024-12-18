@@ -87,7 +87,7 @@ export async function testPersonaGeneration(userId: string) {
     console.log("Storing personas in Supabase...");
     
     const [storedPositivePersona, storedNegativePersona] = await Promise.all([
-      profileService.saveAIPersona(userId, {
+      profileService.savePositivePersona(userId, {
         ...aiPersona,
         user_id: userId,
         updated_at: new Date().toISOString()

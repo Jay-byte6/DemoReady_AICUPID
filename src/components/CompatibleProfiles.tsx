@@ -1,67 +1,44 @@
-import React from 'react';
-import { ArrowLeft, Heart, ThumbsUp, ThumbsDown } from 'lucide-react';
-import CompatibilityCard from './CompatibilityCard';
-import CompatibilityInsights from './CompatibilityInsights';
+import React, { useState } from 'react';
+import { SmartMatch } from '../types';
+import CompatibilityInsights from './compatibility/CompatibilityInsights';
 
-interface Profile {
-  id: number;
-  name: string;
-  age: number;
-  compatibility: number;
-  image: string;
-  traits: string[];
-  loveLanguage: string;
-  liked?: boolean;
+interface CompatibleProfilesProps {
+  profiles: SmartMatch[];
 }
 
-interface Props {
-  profiles: Profile[];
-  onBack: () => void;
-}
-
-const CompatibleProfiles: React.FC<Props> = ({ profiles, onBack }) => {
-  const [selectedProfile, setSelectedProfile] = React.useState<Profile | null>(null);
-  const [likedProfiles, setLikedProfiles] = React.useState<Set<number>>(new Set());
-
-  const handleLike = (profileId: number, liked: boolean) => {
-    setLikedProfiles(prev => {
-      const newSet = new Set(prev);
-      if (liked) {
-        newSet.add(profileId);
-      } else {
-        newSet.delete(profileId);
-      }
-      return newSet;
-    });
-  };
+const CompatibleProfiles: React.FC<CompatibleProfilesProps> = ({ profiles }) => {
+  const [selectedProfile, setSelectedProfile] = useState<SmartMatch | null>(null);
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <button
-          onClick={onBack}
-          className="flex items-center text-gray-600 hover:text-gray-800"
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {profiles.map((matchedProfile) => (
+        <div
+          key={matchedProfile.profile.cupid_id}
+          className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300"
         >
-          <ArrowLeft className="w-5 h-5 mr-2" />
-          Back to Analysis
-        </button>
-        <div className="flex items-center">
-          <Heart className="w-6 h-6 text-rose-500 mr-2" />
-          <h1 className="text-2xl font-bold">Your Top 10 Matches</h1>
+          <div className="p-6">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="text-xl font-semibold">
+                  {matchedProfile.profile.fullname}
+                </h3>
+                <p className="text-gray-600">
+                  {matchedProfile.profile.age} • {matchedProfile.profile.location}
+                </p>
+              </div>
+              <div className="flex items-center">
+                <span className="font-semibold">{Math.round(matchedProfile.compatibility_score)}%</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setSelectedProfile(matchedProfile)}
+              className="w-full bg-rose-500 text-white py-2 rounded-lg hover:bg-rose-600 transition-colors"
+            >
+              View Compatibility
+            </button>
+          </div>
         </div>
-      </div>
-
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {profiles.slice(0, 10).map((profile) => (
-          <CompatibilityCard
-            key={profile.id}
-            profile={profile}
-            onViewInsights={() => setSelectedProfile(profile)}
-            isLiked={likedProfiles.has(profile.id)}
-            onLike={(liked) => handleLike(profile.id, liked)}
-          />
-        ))}
-      </div>
+      ))}
 
       {selectedProfile && (
         <CompatibilityInsights

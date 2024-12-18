@@ -525,7 +525,7 @@ export const profileService = {
         const compatibility = await this.calculateCompatibility(userId, user.user_id);
         
         // Check deal breakers
-        const hasDealBreaker = preferences.deal_breakers?.some(dealBreaker => 
+        const hasDealBreaker = preferences.deal_breakers?.some((dealBreaker: string) => 
           user.dealbreakers?.includes(dealBreaker)
         );
 

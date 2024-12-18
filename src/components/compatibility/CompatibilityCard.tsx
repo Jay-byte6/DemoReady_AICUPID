@@ -25,7 +25,7 @@ const CompatibilityCard: React.FC<Props> = ({ profile, onViewInsights, isLiked, 
         <div className="absolute top-4 right-4 bg-white px-3 py-1 rounded-full shadow-md">
           <div className="flex items-center">
             <Heart className="w-4 h-4 text-rose-500 mr-1" fill="currentColor" />
-            <span className="font-semibold">{Math.round(compatibility.overall * 100)}%</span>
+            <span className="font-semibold">{Math.round((compatibility?.overall || 0) * 100)}%</span>
           </div>
         </div>
       </div>
@@ -49,9 +49,9 @@ const CompatibilityCard: React.FC<Props> = ({ profile, onViewInsights, isLiked, 
         </div>
 
         <CompatibilityScore
-          emotional={compatibility.emotional}
-          intellectual={compatibility.intellectual}
-          lifestyle={compatibility.lifestyle}
+          emotional={compatibility?.emotional || 0}
+          intellectual={compatibility?.intellectual || 0}
+          lifestyle={compatibility?.lifestyle || 0}
         />
         
         <div className="flex items-center justify-between mt-4">
