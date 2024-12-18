@@ -138,15 +138,24 @@ export const profileService = {
       // First check if analysis exists
       const existingAnalysis = await this.getPersonalityAnalysis(userId);
       
+      // Format the data with snake_case keys
+      const formattedAnalysis = {
+        user_id: userId,
+        profile_id: userProfile.id,
+        preferences: analysis.preferences || {},
+        psychological_profile: analysis.psychologicalProfile || {},
+        relationship_goals: analysis.relationshipGoals || {},
+        behavioral_insights: analysis.behavioralInsights || {},
+        dealbreakers: analysis.dealbreakers || {},
+        created_at: existingAnalysis?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
       const { data, error } = await supabase
         .from('personality_analysis')
         .upsert({
-          user_id: userId,
-          profile_id: userProfile.id,
-          ...analysis,
-          id: existingAnalysis?.id || undefined,
-          created_at: existingAnalysis?.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          ...formattedAnalysis,
+          id: existingAnalysis?.id || undefined
         })
         .select()
         .single();

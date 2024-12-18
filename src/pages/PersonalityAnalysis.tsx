@@ -27,6 +27,7 @@ interface ProfileSections {
   relationshipGoals: Record<string, any>;
   behavioralInsights: Record<string, any>;
   dealbreakers: Record<string, any>;
+  [key: string]: Record<string, any>;
 }
 
 const PersonalityAnalysis = () => {
@@ -112,24 +113,27 @@ const PersonalityAnalysis = () => {
           updated_at: new Date().toISOString()
         });
       } else {
-        // Save current section to personality analysis
-        const analysisData: any = {};
-        const dbKey = currentSection === 'psychologicalProfile' 
-          ? 'psychological_profile' 
-          : currentSection === 'relationshipGoals'
-          ? 'relationship_goals'
-          : currentSection === 'behavioralInsights'
-          ? 'behavioral_insights'
-          : currentSection;
-        
+        // Format the data for personality analysis
+        const analysisData: any = {
+          user_id: user.id,
+          updated_at: new Date().toISOString()
+        };
+
+        // Map the section names to database column names
+        const sectionMapping: Record<string, string> = {
+          psychologicalProfile: 'psychological_profile',
+          relationshipGoals: 'relationship_goals',
+          behavioralInsights: 'behavioral_insights'
+        };
+
+        const dbKey = sectionMapping[currentSection] || currentSection;
         analysisData[dbKey] = profile[currentSection];
 
-        await profileService.savePersonalityAnalysis(user.id, {
-          ...analysisData,
-          updated_at: new Date().toISOString()
-        });
+        // Save to personality analysis table
+        await profileService.savePersonalityAnalysis(user.id, analysisData);
       }
 
+      console.log(`Successfully saved ${currentSection}`);
       return true;
     } catch (err: any) {
       console.error('Error saving section:', err);
@@ -176,6 +180,42 @@ const PersonalityAnalysis = () => {
       const saved = await saveCurrentSection();
       if (!saved) return;
 
+      // Ensure all sections are saved
+      const allSections = ['personalInfo', 'preferences', 'psychologicalProfile', 'relationshipGoals', 'behavioralInsights', 'dealbreakers'];
+      
+      // Log the current state for debugging
+      console.log('Current profile state:', profile);
+
+      // Validate all sections have data
+      const incompleteSections = allSections.filter(section => {
+        const sectionData = profile[section as keyof ProfileSections];
+        return !sectionData || Object.keys(sectionData).length === 0;
+      });
+
+      if (incompleteSections.length > 0) {
+        setError(`Please complete all sections: ${incompleteSections.join(', ')}`);
+        return;
+      }
+
+      // Save all sections one final time
+      for (const section of allSections) {
+        setCurrentSection(section as keyof ProfileSections);
+        const sectionSaved = await saveCurrentSection();
+        if (!sectionSaved) {
+          setError(`Failed to save ${section}. Please try again.`);
+          return;
+        }
+      }
+
+      console.log('All sections saved successfully');
+      
+      // Generate AI personas
+      await profileService.savePersonalityAnalysis(user.id, {
+        ...profile,
+        user_id: user.id,
+        updated_at: new Date().toISOString()
+      });
+
       // Navigate to smart matching
       navigate('/smart-matching');
     } catch (error: any) {
@@ -187,7 +227,7 @@ const PersonalityAnalysis = () => {
     }
   };
 
-  const updateFormData = (section: string, data: any) => {
+  const updateFormData = (section: keyof ProfileSections, data: Record<string, any>) => {
     setProfile(prev => ({
       ...prev,
       [section]: { ...prev[section], ...data }

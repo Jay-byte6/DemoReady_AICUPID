@@ -16,7 +16,6 @@ const SmartMatching = () => {
   const [cupidId, setCupidId] = useState('');
   const [selectedProfile, setSelectedProfile] = useState<SmartMatch | null>(null);
   const [compatibleProfiles, setCompatibleProfiles] = useState<SmartMatch[]>([]);
-  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
     const profile = getCurrentProfile();
@@ -44,7 +43,7 @@ const SmartMatching = () => {
       setShowLowMatches(includeLowMatches);
     } catch (error: any) {
       console.error('Error finding matches:', error);
-      if (error.message.includes('75%+ compatibility') && !includeLowMatches) {
+      if (error.message?.includes('75%+ compatibility') && !includeLowMatches) {
         setError('No matches found with 75%+ compatibility. Would you like to see profiles with lower compatibility scores?');
       } else {
         setError(error.message || 'Failed to find matches. Please try again later.');
@@ -55,7 +54,7 @@ const SmartMatching = () => {
   };
 
   const handleCupidIdSearch = async () => {
-    if (!cupidId.trim() || !user) {
+    if (!cupidId.trim()) {
       setError('Please enter a valid CUPID ID');
       return;
     }
@@ -64,7 +63,12 @@ const SmartMatching = () => {
     setError(null);
 
     try {
-      const match = await matchingService.findMatchByCupidId(user.id, cupidId);
+      const profile = getCurrentProfile();
+      if (!profile) {
+        throw new Error('Please complete your profile first');
+      }
+
+      const match = await matchingService.findMatchByCupidId(profile.cupidId, cupidId);
       if (match) {
         setSelectedProfile(match);
       } else {
@@ -87,19 +91,11 @@ const SmartMatching = () => {
     setError(null);
   };
 
-  const handleBack = () => {
-    setCompatibleProfiles([]);
-    setShowLowMatches(false);
-    setShowCupidIdSearch(false);
-    setError(null);
-  };
-
-  if (compatibleProfiles.length > 0) {
+  if (loading) {
     return (
-      <CompatibleProfiles
-        profiles={compatibleProfiles}
-        onBack={handleBack}
-      />
+      <div className="flex justify-center items-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      </div>
     );
   }
 
