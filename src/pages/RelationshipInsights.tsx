@@ -11,6 +11,8 @@ interface InsightItem {
   timestamp: string;
   type: TabType;
   details: any;
+  profile?: any;
+  compatibility_insights?: any;
 }
 
 const RelationshipInsights = () => {
@@ -32,26 +34,43 @@ const RelationshipInsights = () => {
 
       try {
         setLoading(true);
-        // TODO: Implement actual data loading
-        // For now, using dummy data
-        const dummyData: InsightItem[] = Array.from({ length: 5 }, (_, i) => ({
-          id: `dummy-${i}`,
-          fullname: `User ${i + 1}`,
-          timestamp: new Date(Date.now() - i * 86400000).toISOString(),
-          type: activeTab,
-          details: {
-            compatibility_score: 75 + Math.random() * 20,
-            last_interaction: new Date(Date.now() - i * 3600000).toISOString(),
-            message_count: Math.floor(Math.random() * 100),
-            compatibility_insights: [
-              'Similar interests in music and art',
-              'Complementary communication styles',
-              'Shared life goals'
-            ]
-          }
-        }));
-
-        setInsights(dummyData);
+        
+        if (activeTab === 'favorites') {
+          // Load actual favorite profiles
+          const favorites = await profileService.getFavoriteProfiles(user.id);
+          const formattedFavorites = favorites.map(favorite => ({
+            id: favorite.id,
+            fullname: favorite.profile?.fullname || 'Anonymous',
+            timestamp: favorite.created_at,
+            type: 'favorites' as TabType,
+            details: {
+              compatibility_score: favorite.compatibility_insights?.compatibility_score || 0,
+              compatibility_insights: favorite.compatibility_insights?.strengths || []
+            },
+            profile: favorite.profile,
+            compatibility_insights: favorite.compatibility_insights
+          }));
+          setInsights(formattedFavorites);
+        } else {
+          // Handle other tabs with existing logic
+          const dummyData: InsightItem[] = Array.from({ length: 5 }, (_, i) => ({
+            id: `dummy-${i}`,
+            fullname: `User ${i + 1}`,
+            timestamp: new Date(Date.now() - i * 86400000).toISOString(),
+            type: activeTab,
+            details: {
+              compatibility_score: 75 + Math.random() * 20,
+              last_interaction: new Date(Date.now() - i * 3600000).toISOString(),
+              message_count: Math.floor(Math.random() * 100),
+              compatibility_insights: [
+                'Similar interests in music and art',
+                'Complementary communication styles',
+                'Shared life goals'
+              ]
+            }
+          }));
+          setInsights(dummyData);
+        }
       } catch (error) {
         console.error('Error loading insights:', error);
       } finally {
@@ -131,7 +150,15 @@ const RelationshipInsights = () => {
             <div className="flex items-start justify-between">
               <div className="flex items-center space-x-4">
                 <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center">
-                  <User className="w-6 h-6 text-indigo-600" />
+                  {item.profile?.profile_image ? (
+                    <img
+                      src={item.profile.profile_image}
+                      alt={item.fullname}
+                      className="w-12 h-12 rounded-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-6 h-6 text-indigo-600" />
+                  )}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">
@@ -164,13 +191,13 @@ const RelationshipInsights = () => {
               )}
             </div>
 
-            {(activeTab === 'compatibility' || activeTab === 'search') && (
+            {(activeTab === 'compatibility' || activeTab === 'search' || activeTab === 'favorites') && (
               <div className="mt-4">
                 <h4 className="text-sm font-medium text-gray-900 mb-2">
                   Compatibility Insights
                 </h4>
                 <ul className="space-y-2">
-                  {item.details.compatibility_insights.map((insight: string, index: number) => (
+                  {(item.compatibility_insights?.strengths || item.details.compatibility_insights).map((insight: string, index: number) => (
                     <li
                       key={index}
                       className="flex items-center text-sm text-gray-600"

@@ -3,12 +3,17 @@ import { useAuth } from '../../contexts/AuthContext';
 import { matchingService } from '../../services/matchingService';
 import { SmartMatch } from '../../types';
 import { supabase } from '../../lib/supabase';
+import { Button, Dialog, DialogContent, DialogActions } from '@mui/material';
+import { Visibility } from '@mui/icons-material';
+import CompatibilityDetails from '../CompatibilityDetails';
 
 export const SmartMatching: React.FC = () => {
   const { user } = useAuth();
   const [matches, setMatches] = useState<SmartMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCompatibility, setShowCompatibility] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState<SmartMatch | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -64,6 +69,23 @@ export const SmartMatching: React.FC = () => {
     } catch (err) {
       console.error('Error toggling favorite:', err);
     }
+  };
+
+  const handleViewProfile = (match: SmartMatch) => {
+    setSelectedProfile({
+      id: match.id,
+      full_name: match.target_user?.full_name || 'Anonymous',
+      age: match.target_user?.age || 'N/A',
+      location: match.target_user?.location || 'Unknown',
+      avatar_url: match.target_user?.avatar_url || '/default-avatar.png',
+      interests: match.target_user?.interests || [],
+      compatibility_score: match.compatibility_score,
+      strengths: match.strengths || [],
+      challenges: match.challenges || [],
+      tips: match.tips || [],
+      personality_traits: ['Creative', 'Ambitious', 'Empathetic']
+    });
+    setShowCompatibility(true);
   };
 
   if (loading) {
@@ -152,9 +174,15 @@ export const SmartMatching: React.FC = () => {
                 >
                   {match.is_favorite ? 'Favorited' : 'Add to Favorites'}
                 </button>
-                <button className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors">
-                  View Profile
-                </button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={() => handleViewProfile(match)}
+                  startIcon={<Visibility />}
+                  sx={{ mt: 2 }}
+                >
+                  View Insights
+                </Button>
               </div>
             </div>
           </div>
@@ -166,6 +194,23 @@ export const SmartMatching: React.FC = () => {
           <p className="text-gray-600">No matches found. Try adjusting your preferences.</p>
         </div>
       )}
+
+      {/* Compatibility Dialog */}
+      <Dialog
+        open={showCompatibility}
+        onClose={() => setShowCompatibility(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogContent sx={{ p: 0 }}>
+          {selectedProfile && (
+            <CompatibilityDetails
+              profile={selectedProfile}
+              onClose={() => setShowCompatibility(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }; 

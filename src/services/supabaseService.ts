@@ -1,5 +1,30 @@
 import { supabase } from '../lib/supabase';
+import { SmartMatch, FavoriteProfile, UserProfile, CompatibilityInsight } from '../types';
 import { generatePersonaAnalysis, analyzeCompatibility } from './openai';
+
+interface FavoriteRecord {
+  id: string;
+  user_id: string;
+  favorite_user_id: string;
+  created_at: string;
+}
+
+interface CompatibilityRecord {
+  id: string;
+  user_id: string;
+  target_user_id: string;
+  compatibility_score: number;
+  summary: string;
+  long_term_prediction: string;
+  strengths: string[];
+  challenges: string[];
+  individual_challenges: {
+    user_challenges: string[];
+    target_challenges: string[];
+  };
+  improvement_tips: string[];
+  last_updated: string;
+}
 
 export const analyzeCompatibilityByCupidId = async (userId: string, cupidId: string) => {
   try {
@@ -447,102 +472,96 @@ export const profileService = {
   async calculateCompatibility(userId: string, targetUserId: string) {
     try {
       // Get both user profiles and their analyses
-      const [user1Profile, user2Profile, user1Analysis, user2Analysis] = await Promise.all([
+      const [userProfile, targetProfile, userAnalysis, targetAnalysis] = await Promise.all([
         this.getUserProfile(userId),
         this.getUserProfile(targetUserId),
         this.getPersonalityAnalysis(userId),
         this.getPersonalityAnalysis(targetUserId)
       ]);
 
-      const user1Data = { profile: user1Profile, analysis: user1Analysis };
-      const user2Data = { profile: user2Profile, analysis: user2Analysis };
+      if (!userProfile || !targetProfile) {
+        throw new Error('One or both profiles not found');
+      }
 
-      // Generate compatibility analysis
-      const compatibilityResult = await analyzeCompatibility(user1Data, user2Data);
+      // Generate compatibility analysis using OpenAI
+      const compatibilityResult = await analyzeCompatibility({
+        user1: { profile: userProfile, analysis: userAnalysis },
+        user2: { profile: targetProfile, analysis: targetAnalysis }
+      });
 
-      // Save compatibility score
-      const { data, error } = await supabase
-        .from('compatibility_scores')
-        .upsert({
-          user_id: userId,
-          target_user_id: targetUserId,
-          compatibility_score: compatibilityResult.compatibility_score,
-          strengths: compatibilityResult.strengths,
-          challenges: compatibilityResult.challenges,
-          long_term_prediction: compatibilityResult.long_term_prediction,
-          improvement_tips: compatibilityResult.improvement_tips,
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+      return {
+        compatibility_score: Math.round(compatibilityResult.compatibility_score * 100),
+        strengths: compatibilityResult.strengths || [],
+        challenges: compatibilityResult.challenges || [],
+        tips: compatibilityResult.improvement_tips || [],
+        long_term_prediction: compatibilityResult.long_term_prediction || ''
+      };
     } catch (error) {
       console.error('Error calculating compatibility:', error);
       throw error;
     }
   },
 
-  async findTopMatches(userId: string, limit = 20) {
+  async findTopMatches(userId: string): Promise<SmartMatch[]> {
     try {
-      // Get current user's profile and preferences
-      const userProfile = await this.getUserProfile(userId);
-      if (!userProfile) throw new Error('User profile not found');
-
-      const preferences = userProfile.matching_preferences || {};
-      
-      // Get all users except the current user with basic filtering
-      let query = supabase
+      // First get all user profiles except the current user
+      const { data: profiles, error: profilesError } = await supabase
         .from('user_profiles')
         .select('*')
         .neq('user_id', userId);
 
-      // Apply age filter if set
-      if (preferences.min_age) {
-        query = query.gte('age', preferences.min_age);
-      }
-      if (preferences.max_age) {
-        query = query.lte('age', preferences.max_age);
-      }
+      if (profilesError) throw profilesError;
 
-      // Apply education level filter if set
-      if (preferences.education_level) {
-        query = query.eq('education_level', preferences.education_level);
-      }
+      // Get compatibility insights for these profiles
+      const { data: matches, error: matchesError } = await supabase
+        .from('smart_matches')
+        .select('*')
+        .eq('user_id', userId);
 
-      // Apply relationship type filter if set
-      if (preferences.relationship_type) {
-        query = query.eq('relationship_type', preferences.relationship_type);
-      }
+      if (matchesError) throw matchesError;
 
-      const { data: users, error: usersError } = await query;
+      // Get favorite profiles
+      const { data: favorites, error: favoritesError } = await supabase
+        .from('favorite_profiles')
+        .select('favorite_user_id')
+        .eq('user_id', userId);
 
-      if (usersError) throw usersError;
+      if (favoritesError) throw favoritesError;
 
-      // Calculate compatibility with each user
-      const compatibilityPromises = users.map(async (user) => {
-        const compatibility = await this.calculateCompatibility(userId, user.user_id);
-        
-        // Check deal breakers
-        const hasDealBreaker = preferences.deal_breakers?.some((dealBreaker: string) => 
-          user.dealbreakers?.includes(dealBreaker)
-        );
+      const favoriteIds = (favorites || []).map(f => f.favorite_user_id);
+      const matchesMap = new Map(matches?.map(m => [m.target_user_id, m]));
 
+      // Combine the data
+      const smartMatches: SmartMatch[] = (profiles || []).map(profile => {
+        const match = matchesMap.get(profile.user_id) || {};
         return {
-          user,
-          compatibility,
-          hasDealBreaker
+          profile: {
+            id: profile.id,
+            user_id: profile.user_id,
+            fullname: profile.fullname,
+            age: profile.age,
+            location: profile.location,
+            profile_image: profile.profile_image,
+            interests: profile.interests
+          },
+          compatibility_score: match.compatibility_score || 0,
+          compatibility_details: {
+            strengths: match.strengths || [],
+            challenges: match.challenges || [],
+            tips: match.tips || [],
+            long_term_prediction: match.long_term_prediction || ''
+          },
+          request_status: {
+            persona_view: 'NONE',
+            chat: 'NONE'
+          },
+          is_favorite: favoriteIds.includes(profile.user_id),
+          last_updated: match.last_updated
         };
       });
 
-      const results = await Promise.all(compatibilityPromises);
-
-      // Filter and sort results
-      return results
-        .filter(result => !result.hasDealBreaker) // Remove matches with deal breakers
-        .sort((a, b) => b.compatibility.compatibility_score - a.compatibility.compatibility_score)
-        .slice(0, limit);
+      // Sort by compatibility score
+      return smartMatches.sort((a, b) => b.compatibility_score - a.compatibility_score);
     } catch (error) {
       console.error('Error finding top matches:', error);
       throw error;
@@ -708,60 +727,173 @@ export const profileService = {
     }
   },
 
-  async getFavoriteProfiles(userId: string) {
+  async getFavoriteProfiles(userId: string): Promise<FavoriteProfile[]> {
     try {
-      const { data, error } = await supabase
+      // First get the favorite profile IDs
+      const { data: favorites, error: favoritesError } = await supabase
         .from('favorite_profiles')
-        .select(`
-          *,
-          favorite_user:favorite_user_id(
-            id,
-            user_profiles!inner(*)
-          )
-        `)
+        .select('*')
         .eq('user_id', userId);
 
-      if (error) throw error;
-      return data || [];
+      if (favoritesError) throw favoritesError;
+      if (!favorites || favorites.length === 0) return [];
+
+      // Get the user profiles for these favorites
+      const favoriteIds = favorites.map((f: FavoriteRecord) => f.favorite_user_id);
+      const { data: profiles, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .in('user_id', favoriteIds);
+
+      if (profilesError) throw profilesError;
+
+      // Get compatibility insights for these profiles
+      const { data: insights, error: insightsError } = await supabase
+        .from('compatibility_insights')
+        .select('*')
+        .eq('user_id', userId)
+        .in('target_user_id', favoriteIds);
+
+      if (insightsError) throw insightsError;
+
+      const insightsMap = new Map(insights?.map((i: CompatibilityRecord) => [i.target_user_id, i]));
+
+      // Combine all the data
+      return favorites.map((favorite: FavoriteRecord) => {
+        const profile = profiles?.find((p: UserProfile) => p.user_id === favorite.favorite_user_id);
+        const insight = insightsMap.get(favorite.favorite_user_id) || {} as CompatibilityRecord;
+        
+        return {
+          id: favorite.id,
+          user_id: userId,
+          favorite_user_id: favorite.favorite_user_id,
+          created_at: favorite.created_at,
+          profile: profile ? {
+            id: profile.id,
+            user_id: profile.user_id,
+            cupid_id: profile.cupid_id,
+            fullname: profile.fullname,
+            age: profile.age,
+            location: profile.location,
+            gender: profile.gender,
+            occupation: profile.occupation,
+            relationship_history: profile.relationship_history,
+            lifestyle: profile.lifestyle,
+            profile_image: profile.profile_image,
+            created_at: profile.created_at,
+            updated_at: profile.updated_at
+          } : undefined,
+          compatibility_insights: {
+            id: insight.id,
+            compatibility_score: insight.compatibility_score,
+            summary: insight.summary,
+            long_term_prediction: insight.long_term_prediction,
+            strengths: insight.strengths || [],
+            challenges: insight.challenges || [],
+            individual_challenges: insight.individual_challenges || { user_challenges: [], target_challenges: [] },
+            improvement_tips: insight.improvement_tips || [],
+            last_generated_at: insight.last_updated,
+            needs_update: false
+          }
+        };
+      });
     } catch (error) {
       console.error('Error getting favorite profiles:', error);
       return [];
     }
   },
 
-  async toggleFavoriteProfile(userId: string, favoriteUserId: string) {
+  async addToFavorites(userId: string, favoriteUserId: string) {
     try {
-      // Check if already favorited
-      const { data: existing } = await supabase
+      const { data, error } = await supabase
         .from('favorite_profiles')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('favorite_user_id', favoriteUserId)
+        .insert({
+          user_id: userId,
+          favorite_user_id: favoriteUserId,
+          created_at: new Date().toISOString()
+        })
+        .select()
         .single();
 
-      if (existing) {
-        // Remove from favorites
-        const { error: deleteError } = await supabase
-          .from('favorite_profiles')
-          .delete()
-          .eq('id', existing.id);
-
-        if (deleteError) throw deleteError;
-        return false; // Not favorited anymore
-      } else {
-        // Add to favorites
-        const { error: insertError } = await supabase
-          .from('favorite_profiles')
-          .insert({
-            user_id: userId,
-            favorite_user_id: favoriteUserId
-          });
-
-        if (insertError) throw insertError;
-        return true; // Now favorited
-      }
+      if (error) throw error;
+      return data;
     } catch (error) {
-      console.error('Error toggling favorite profile:', error);
+      console.error('Error adding to favorites:', error);
+      throw error;
+    }
+  },
+
+  async removeFromFavorites(userId: string, favoriteUserId: string) {
+    try {
+      const { error } = await supabase
+        .from('favorite_profiles')
+        .delete()
+        .eq('user_id', userId)
+        .eq('favorite_user_id', favoriteUserId);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error removing from favorites:', error);
+      throw error;
+    }
+  },
+
+  async generateCompatibilityInsights(userId: string, targetUserId: string) {
+    try {
+      // Get both user profiles
+      const [userProfile, targetProfile] = await Promise.all([
+        this.getUserProfile(userId),
+        this.getUserProfile(targetUserId)
+      ]);
+
+      if (!userProfile || !targetProfile) {
+        throw new Error('One or both profiles not found');
+      }
+
+      // Generate compatibility analysis
+      const compatibility = await this.calculateCompatibility(userId, targetUserId);
+
+      // Save to database
+      const { data, error } = await supabase
+        .from('smart_matches')
+        .upsert({
+          user_id: userId,
+          target_user_id: targetUserId,
+          compatibility_score: compatibility.compatibility_score,
+          strengths: compatibility.strengths,
+          challenges: compatibility.challenges,
+          tips: compatibility.tips,
+          long_term_prediction: compatibility.long_term_prediction,
+          last_updated: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error generating compatibility insights:', error);
+      throw error;
+    }
+  },
+
+  async createNotification({ user_id, type, title, message, data = {} }) {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .insert({
+          user_id,
+          type,
+          title,
+          message,
+          data,
+          read: false
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error creating notification:', error);
       throw error;
     }
   },

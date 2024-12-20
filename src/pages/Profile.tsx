@@ -1,23 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, MapPin, Briefcase, Heart, Brain, Camera } from 'lucide-react';
+import { User, Mail, MapPin, Briefcase, Heart, Brain, Star } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { profileService } from '../services/supabaseService';
 import PersonaInsights from '../components/profile/PersonaInsights';
 import ProfileImageUpload from '../components/profile/ProfileImageUpload';
-import type { AIPersona, NegativePersona, UserProfile } from '../types';
+import type { AIPersona, NegativePersona, UserProfile, CompatibilityDetails } from '../types';
+import { useParams } from 'react-router-dom';
 
 const Profile = () => {
   const { user } = useAuth();
+  const { userId } = useParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [positivePersona, setPositivePersona] = useState<AIPersona | null>(null);
   const [negativePersona, setNegativePersona] = useState<NegativePersona | null>(null);
+  const [compatibilityDetails, setCompatibilityDetails] = useState<CompatibilityDetails | null>(null);
+  const [compatibilityScore, setCompatibilityScore] = useState<number | null>(null);
+  const isOwnProfile = !userId || userId === user?.id;
 
   useEffect(() => {
     const loadProfileData = async () => {
       if (!user) {
-        setError('Please log in to view your profile');
+        setError('Please log in to view profiles');
         setLoading(false);
         return;
       }
@@ -25,10 +30,10 @@ const Profile = () => {
       try {
         setLoading(true);
         setError(null);
-        console.log('Loading profile data for user:', user.id);
+        console.log('Loading profile data for user:', userId || user.id);
 
         // Load user profile
-        const profile = await profileService.getUserProfile(user.id);
+        const profile = await profileService.getUserProfile(userId || user.id);
         console.log('Loaded profile:', profile);
         
         if (!profile) {
@@ -39,41 +44,30 @@ const Profile = () => {
         }
         setUserProfile(profile);
 
-        // Load personas
-        console.log('Loading personas...');
-        try {
+        if (isOwnProfile) {
+          // Load own profile data
           const [positive, negative] = await Promise.all([
             profileService.getPositivePersona(user.id),
             profileService.getNegativePersona(user.id)
           ]);
-          console.log('Loaded positive persona:', JSON.stringify(positive, null, 2));
-          console.log('Loaded negative persona:', JSON.stringify(negative, null, 2));
 
-          if (!positive || !negative) {
-            console.log('Missing persona data');
-            setError('Personality analysis incomplete. Please complete your analysis first.');
-            setLoading(false);
-            return;
+          if (positive && negative && validatePersonaData(positive, negative)) {
+            setPositivePersona(positive);
+            setNegativePersona(negative);
           }
+        } else {
+          // Load compatibility data for other user's profile using profileService
+          const compatibilityData = await profileService.getCompatibilityScore(user.id, userId);
 
-          // Ensure the personas have the required structure
-          const hasValidStructure = validatePersonaData(positive, negative);
-          console.log('Persona validation result:', hasValidStructure);
-
-          if (!hasValidStructure) {
-            console.error('Invalid persona data structure');
-            setError('There was an issue loading your personality analysis. Please try again.');
-            setLoading(false);
-            return;
+          if (compatibilityData) {
+            setCompatibilityScore(compatibilityData.compatibility_score);
+            setCompatibilityDetails({
+              strengths: compatibilityData.strengths || [],
+              challenges: compatibilityData.challenges || [],
+              tips: compatibilityData.improvement_tips || [],
+              long_term_prediction: compatibilityData.long_term_prediction || ''
+            });
           }
-
-          setPositivePersona(positive);
-          setNegativePersona(negative);
-        } catch (personaError: any) {
-          console.error('Error loading personas:', personaError);
-          setError('Failed to load personality analysis. Please try again.');
-          setLoading(false);
-          return;
         }
       } catch (err: any) {
         console.error('Error loading profile data:', err);
@@ -84,7 +78,7 @@ const Profile = () => {
     };
 
     loadProfileData();
-  }, [user]);
+  }, [user, userId, isOwnProfile]);
 
   // Helper function to validate persona data structure
   const validatePersonaData = (positive: any, negative: any): boolean => {
@@ -173,13 +167,30 @@ const Profile = () => {
       {/* Profile Header */}
       <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
         <div className="flex items-start space-x-6">
-          <ProfileImageUpload
-            userId={user?.id || ''}
-            currentImage={userProfile?.profile_image || null}
-            onImageUpdate={(newImageUrl) => {
-              setUserProfile(prev => prev ? { ...prev, profile_image: newImageUrl } : null);
-            }}
-          />
+          {isOwnProfile ? (
+            <ProfileImageUpload
+              userId={user?.id || ''}
+              currentImage={userProfile?.profile_image || null}
+              onImageUpdate={(newImageUrl) => {
+                setUserProfile(prev => prev ? { ...prev, profile_image: newImageUrl } : null);
+              }}
+            />
+          ) : (
+            <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-100">
+              {userProfile?.profile_image ? (
+                <img
+                  src={userProfile.profile_image}
+                  alt={userProfile.fullname || 'Profile'}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-indigo-100 text-indigo-600">
+                  <User className="w-12 h-12" />
+                </div>
+              )}
+            </div>
+          )}
+          
           <div className="flex-1">
             <div className="flex justify-between">
               <div>
@@ -225,14 +236,77 @@ const Profile = () => {
         </div>
       </div>
 
-      {/* Persona Insights */}
-      {positivePersona && negativePersona && (
+      {/* Persona Insights - for own profile */}
+      {isOwnProfile && positivePersona && negativePersona && (
         <div className="mb-8">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Personality Analysis</h2>
           <PersonaInsights
             positivePersona={positivePersona}
             negativePersona={negativePersona}
           />
+        </div>
+      )}
+
+      {/* Compatibility Insights - for other profiles */}
+      {!isOwnProfile && compatibilityDetails && (
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-gray-900">Compatibility Analysis</h2>
+            {compatibilityScore !== null && (
+              <span className="px-4 py-2 bg-indigo-600 text-white rounded-full text-sm font-semibold">
+                {Math.round(compatibilityScore)}% Match
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-6">
+            {/* Strengths */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Strengths</h3>
+              <div className="space-y-2">
+                {compatibilityDetails.strengths.map((strength, index) => (
+                  <div key={index} className="flex items-center text-gray-600">
+                    <Star className="w-5 h-5 mr-2 text-yellow-500" />
+                    <span>{strength}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Challenges */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Challenges</h3>
+              <div className="space-y-2">
+                {compatibilityDetails.challenges.map((challenge, index) => (
+                  <div key={index} className="flex items-center text-gray-600">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
+                    <span>{challenge}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Improvement Tips */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Tips for Better Connection</h3>
+              <div className="space-y-2">
+                {compatibilityDetails.tips.map((tip, index) => (
+                  <div key={index} className="flex items-center text-gray-600">
+                    <div className="w-2 h-2 bg-indigo-400 rounded-full mr-3"></div>
+                    <span>{tip}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Long-term Prediction */}
+            {compatibilityDetails.long_term_prediction && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Long-term Outlook</h3>
+                <p className="text-gray-600">{compatibilityDetails.long_term_prediction}</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -87,6 +87,15 @@ export const CompatibilityInsights: React.FC<CompatibilityInsightsProps> = ({ pr
               {details.long_term_prediction}
             </p>
           </div>
+
+          {/* View Detailed Analysis */}
+          <div className="mt-6">
+            <button
+              className="text-blue-500 hover:text-blue-700"
+            >
+              View Detailed Analysis
+            </button>
+          </div>
         </div>
       </div>
     </div>

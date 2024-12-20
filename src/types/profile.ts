@@ -47,18 +47,13 @@ export interface Profile {
 }
 
 export interface CompatibilityScore {
-  score: number;
-  insights: string[];
-  details: {
-    strengths: string[];
-    challenges: string[];
-    tips: string[];
-    long_term_prediction: string;
-  };
-  overall?: number;
-  emotional?: number;
-  intellectual?: number;
-  lifestyle?: number;
+  overall: number;
+  emotional: number;
+  intellectual: number;
+  lifestyle: number;
+  summary?: string;
+  strengths?: string[];
+  challenges?: string[];
 }
 
 export interface MatchedProfile extends Profile {

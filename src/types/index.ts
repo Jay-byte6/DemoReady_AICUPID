@@ -101,11 +101,12 @@ export interface UserProfile {
   occupation: string;
   relationship_history: string;
   lifestyle: string;
+  interests?: string[];
+  profile_image: string | null;
   created_at: string;
   updated_at: string;
-  matching_preferences: any | null;
-  notification_preferences: any | null;
-  profile_image: string | null;
+  matching_preferences?: any;
+  notification_preferences?: any;
 }
 
 export interface PersonaTrait {
@@ -156,6 +157,42 @@ export interface FavoriteProfile {
   user_id: string;
   favorite_user_id: string;
   created_at: string;
+  profile?: UserProfile;
+  compatibility_insights?: {
+    id: string;
+    compatibility_score: number;
+    summary: string;
+    long_term_prediction: string;
+    strengths: string[];
+    challenges: string[];
+    individual_challenges: {
+      user_challenges: string[];
+      target_challenges: string[];
+    };
+    improvement_tips: string[];
+    last_generated_at: string;
+    needs_update: boolean;
+  };
+}
+
+export interface CompatibilityInsight {
+  id: string;
+  user_id: string;
+  target_user_id: string;
+  compatibility_score: number;
+  summary: string;
+  long_term_prediction: string;
+  strengths: string[];
+  challenges: string[];
+  individual_challenges: {
+    user_challenges: string[];
+    target_challenges: string[];
+  };
+  improvement_tips: string[];
+  last_generated_at: string;
+  needs_update: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface RelationshipInsight {
@@ -174,14 +211,24 @@ export interface RelationshipInsight {
 }
 
 export interface SmartMatch {
-  profile: UserProfile;
-  compatibility_score: number;
-  compatibility_details: CompatibilityDetails;
-  request_status: {
-    persona_view: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
-    chat: 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  id: string;
+  user_id: string;
+  target_user?: {
+    id: string;
+    full_name: string;
+    age?: number;
+    location?: string;
+    avatar_url?: string;
+    interests?: string[];
   };
-  is_favorite: boolean;
+  compatibility_score: number;
+  strengths: string[];
+  challenges: string[];
+  tips: string[];
+  long_term_prediction: string;
+  is_favorite?: boolean;
+  created_at?: string;
+  last_updated?: string;
 }
 
 export interface Message {

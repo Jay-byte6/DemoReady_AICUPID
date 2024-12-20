@@ -1,16 +1,33 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import NotificationCenter from './notifications/NotificationCenter';
-import { UserCircle } from 'lucide-react';
+import { UserCircle, Heart, X } from 'lucide-react';
+import FavoriteProfiles from './profile/FavoriteProfiles';
 
 const Navbar: React.FC = () => {
   const { user, signOut } = useAuth();
   const location = useLocation();
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const isActive = (path: string) => {
     return location.pathname === path;
   };
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   return (
     <nav className="bg-white shadow-lg">
@@ -61,24 +78,50 @@ const Navbar: React.FC = () => {
             {user ? (
               <>
                 <NotificationCenter />
-                <div className="relative group">
-                  <button className="flex items-center space-x-2 text-gray-700 hover:text-indigo-600">
+                <div className="relative" ref={menuRef}>
+                  <button 
+                    className="flex items-center space-x-2 text-gray-700 hover:text-indigo-600"
+                    onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                  >
                     <UserCircle className="h-6 w-6" />
                   </button>
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 hidden group-hover:block">
-                    <Link
-                      to="/settings"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50"
-                    >
-                      Settings
-                    </Link>
-                    <button
-                      onClick={signOut}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50"
-                    >
-                      Sign Out
-                    </button>
-                  </div>
+                  {isProfileMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                      <Link
+                        to="/profile"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                      >
+                        My Profile
+                      </Link>
+                      <Link
+                        to="/relationship-insights"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                      >
+                        <div className="flex items-center">
+                          <Heart className="w-4 h-4 mr-2" />
+                          Favorites
+                        </div>
+                      </Link>
+                      <Link
+                        to="/settings"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                      >
+                        Settings
+                      </Link>
+                      <button
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          signOut();
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50"
+                      >
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

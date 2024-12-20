@@ -1,155 +1,238 @@
 import React, { useState } from 'react';
-import { X, Heart, User, ArrowRight, Loader2 } from 'lucide-react';
-import { profileService } from '../services/supabaseService';
-import { useAuth } from '../contexts/AuthContext';
-import type { UserProfile, CompatibilityScore } from '../types';
+import { UserProfile, CompatibilityScore } from '../types';
+import { supabase } from '../lib/supabase';
 
-interface Props {
+interface CompatibilityCheckModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onViewInsights: (profile: UserProfile, compatibility: CompatibilityScore) => void;
+  currentUser: UserProfile;
+  targetUser: UserProfile;
 }
 
-const CompatibilityCheckModal: React.FC<Props> = ({ isOpen, onClose, onViewInsights }) => {
-  const { user } = useAuth();
-  const [cupidId, setCupidId] = useState('');
+const CompatibilityCheckModal: React.FC<CompatibilityCheckModalProps> = ({
+  isOpen,
+  onClose,
+  currentUser,
+  targetUser,
+}) => {
   const [loading, setLoading] = useState(false);
+  const [compatibilityScore, setCompatibilityScore] = useState<CompatibilityScore | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{
-    profile: UserProfile;
-    compatibility: CompatibilityScore;
-  } | null>(null);
 
-  const handleCheck = async () => {
-    if (!cupidId.trim() || !user?.id) return;
-
+  const analyzeCompatibility = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
+      const { data: existingAnalysis, error: fetchError } = await supabase
+        .from('compatibility_analysis')
+        .select('*')
+        .eq('user1_id', currentUser.user_id)
+        .eq('user2_id', targetUser.user_id)
+        .single();
 
-      const { targetProfile, compatibility } = await profileService.analyzeCompatibilityByCupidId(
-        user.id,
-        cupidId
-      );
+      if (fetchError) throw fetchError;
 
-      setResult({
-        profile: targetProfile,
-        compatibility
-      });
-    } catch (err: any) {
-      console.error('Error checking compatibility:', err);
-      setError(err.message || 'Failed to check compatibility');
+      if (existingAnalysis) {
+        setCompatibilityScore(existingAnalysis.score);
+      } else {
+        // Calculate new compatibility score
+        const score: CompatibilityScore = {
+          overall: calculateOverallScore(),
+          emotional: calculateEmotionalScore(),
+          intellectual: calculateIntellectualScore(),
+          lifestyle: calculateLifestyleScore(),
+          score: 0, // Will be calculated based on other scores
+          insights: generateInsights(),
+          details: {
+            strengths: generateStrengths(),
+            challenges: generateChallenges(),
+            tips: generateTips(),
+            long_term_prediction: generatePrediction()
+          }
+        };
+
+        score.score = (score.overall + score.emotional + score.intellectual + score.lifestyle) / 4;
+
+        // Save to database
+        const { error: saveError } = await supabase
+          .from('compatibility_analysis')
+          .insert({
+            user1_id: currentUser.user_id,
+            user2_id: targetUser.user_id,
+            score
+          });
+
+        if (saveError) throw saveError;
+        setCompatibilityScore(score);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
   };
 
+  const calculateOverallScore = () => {
+    // Implement overall compatibility calculation
+    return Math.random() * 100; // Placeholder
+  };
+
+  const calculateEmotionalScore = () => {
+    // Implement emotional compatibility calculation
+    return Math.random() * 100; // Placeholder
+  };
+
+  const calculateIntellectualScore = () => {
+    // Implement intellectual compatibility calculation
+    return Math.random() * 100; // Placeholder
+  };
+
+  const calculateLifestyleScore = () => {
+    // Implement lifestyle compatibility calculation
+    return Math.random() * 100; // Placeholder
+  };
+
+  const generateInsights = () => {
+    // Generate compatibility insights
+    return [
+      'You both share similar values',
+      'Your communication styles complement each other',
+      'You have compatible life goals'
+    ];
+  };
+
+  const generateStrengths = () => {
+    // Generate relationship strengths
+    return [
+      'Strong emotional connection',
+      'Similar interests',
+      'Complementary personalities'
+    ];
+  };
+
+  const generateChallenges = () => {
+    // Generate potential challenges
+    return [
+      'Different communication styles',
+      'Varying life priorities',
+      'Different approaches to conflict'
+    ];
+  };
+
+  const generateTips = () => {
+    // Generate improvement tips
+    return [
+      'Practice active listening',
+      'Schedule regular quality time',
+      'Be open about your feelings'
+    ];
+  };
+
+  const generatePrediction = () => {
+    // Generate long-term prediction
+    return 'This relationship shows strong potential for long-term compatibility with proper communication and understanding.';
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          {/* Header */}
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Check Compatibility</h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full"
-            >
-              <X className="w-6 h-6" />
-            </button>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+        <h2 className="text-2xl font-bold mb-4">Compatibility Analysis</h2>
+        
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {error}
           </div>
+        )}
 
-          {/* Search Input */}
-          {!result && (
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Enter CUPID ID
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={cupidId}
-                  onChange={(e) => setCupidId(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Enter 6-digit CUPID ID"
-                  maxLength={6}
-                />
-                <button
-                  onClick={handleCheck}
-                  disabled={loading || !cupidId.trim()}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400"
-                >
-                  {loading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <ArrowRight className="w-5 h-5" />
-                  )}
-                </button>
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mx-auto"></div>
+            <p className="mt-4">Analyzing compatibility...</p>
+          </div>
+        ) : compatibilityScore ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gray-100 p-4 rounded">
+                <h3 className="font-semibold">Overall Compatibility</h3>
+                <p className="text-2xl font-bold text-indigo-600">{compatibilityScore.overall.toFixed(1)}%</p>
               </div>
-              {error && (
-                <p className="mt-2 text-sm text-red-600">{error}</p>
-              )}
-            </div>
-          )}
-
-          {/* Results */}
-          {result && (
-            <div className="space-y-6">
-              {/* Profile Card */}
-              <div className="flex items-start space-x-4">
-                <div className="w-24 h-24 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                  <User className="w-12 h-12 text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900">
-                    {result.profile.fullname}
-                  </h3>
-                  <p className="text-gray-500">{result.profile.location}</p>
-                  <div className="mt-2 flex items-center">
-                    <Heart className="w-5 h-5 text-pink-500 mr-2" />
-                    <span className="text-lg font-semibold text-pink-600">
-                      {Math.round(result.compatibility.score * 100)}% Compatible
-                    </span>
-                  </div>
-                </div>
+              <div className="bg-gray-100 p-4 rounded">
+                <h3 className="font-semibold">Emotional Compatibility</h3>
+                <p className="text-2xl font-bold text-indigo-600">{compatibilityScore.emotional.toFixed(1)}%</p>
               </div>
-
-              {/* Quick Insights */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-2">Quick Insights</h4>
-                <ul className="space-y-2">
-                  {result.compatibility.insights.slice(0, 3).map((insight, index) => (
-                    <li key={index} className="text-gray-600 flex items-start">
-                      <span className="w-2 h-2 mt-2 bg-indigo-500 rounded-full mr-2" />
-                      {insight}
-                    </li>
-                  ))}
-                </ul>
+              <div className="bg-gray-100 p-4 rounded">
+                <h3 className="font-semibold">Intellectual Compatibility</h3>
+                <p className="text-2xl font-bold text-indigo-600">{compatibilityScore.intellectual.toFixed(1)}%</p>
               </div>
-
-              {/* Actions */}
-              <div className="flex justify-end space-x-4">
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => onViewInsights(result.profile, result.compatibility)}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                >
-                  View Full Insights
-                </button>
+              <div className="bg-gray-100 p-4 rounded">
+                <h3 className="font-semibold">Lifestyle Compatibility</h3>
+                <p className="text-2xl font-bold text-indigo-600">{compatibilityScore.lifestyle.toFixed(1)}%</p>
               </div>
             </div>
-          )}
+
+            <div>
+              <h3 className="font-semibold mb-2">Key Insights</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                {compatibilityScore.insights.map((insight, index) => (
+                  <li key={index}>{insight}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="font-semibold mb-2">Strengths</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                {compatibilityScore.details.strengths.map((strength, index) => (
+                  <li key={index}>{strength}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="font-semibold mb-2">Challenges</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                {compatibilityScore.details.challenges.map((challenge, index) => (
+                  <li key={index}>{challenge}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="font-semibold mb-2">Improvement Tips</h3>
+              <ul className="list-disc pl-5 space-y-1">
+                {compatibilityScore.details.tips.map((tip, index) => (
+                  <li key={index}>{tip}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="font-semibold mb-2">Long-term Prediction</h3>
+              <p>{compatibilityScore.details.long_term_prediction}</p>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={analyzeCompatibility}
+            className="w-full bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 transition-colors"
+          >
+            Analyze Compatibility
+          </button>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={onClose}
+            className="bg-gray-200 text-gray-800 py-2 px-4 rounded hover:bg-gray-300 transition-colors"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
   );
 };
 
-export default CompatibilityCheckModal; 
+export default CompatibilityCheckModal;
