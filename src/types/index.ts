@@ -6,13 +6,15 @@ export interface CompatibilityDetails {
 }
 
 export interface CompatibilityScore {
-  score: number;
-  insights: string[];
-  details: CompatibilityDetails;
-  overall?: number;
-  emotional?: number;
-  intellectual?: number;
-  lifestyle?: number;
+  overall: number;
+  emotional: number;
+  intellectual: number;
+  lifestyle: number;
+  summary: string;
+  strengths: string[];
+  challenges: string[];
+  tips: string[];
+  long_term_prediction: string;
 }
 
 export interface Profile {
@@ -210,24 +212,34 @@ export interface RelationshipInsight {
   updated_at: string;
 }
 
-export interface SmartMatch {
+export interface SmartMatchProfile {
   id: string;
   user_id: string;
-  target_user?: {
-    id: string;
-    full_name: string;
-    age?: number;
-    location?: string;
-    avatar_url?: string;
-    interests?: string[];
-  };
+  cupid_id?: string;
+  fullname: string;
+  age?: number;
+  location?: string;
+  occupation?: string;
+  profile_image?: string | null;
+  interests?: string[];
+}
+
+export interface SmartMatch {
+  id?: string;
+  user_id?: string;
+  profile: SmartMatchProfile;
   compatibility_score: number;
-  strengths: string[];
-  challenges: string[];
-  tips: string[];
-  long_term_prediction: string;
+  compatibility_details: {
+    strengths: string[];
+    challenges: string[];
+    tips: string[];
+    long_term_prediction: string;
+  };
+  request_status?: {
+    persona_view: string;
+    chat: string;
+  };
   is_favorite?: boolean;
-  created_at?: string;
   last_updated?: string;
 }
 

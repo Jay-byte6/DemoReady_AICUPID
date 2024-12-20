@@ -51,9 +51,11 @@ export interface CompatibilityScore {
   emotional: number;
   intellectual: number;
   lifestyle: number;
-  summary?: string;
-  strengths?: string[];
-  challenges?: string[];
+  summary: string;
+  strengths: string[];
+  challenges: string[];
+  tips?: string[];
+  long_term_prediction?: string;
 }
 
 export interface MatchedProfile extends Profile {
@@ -63,8 +65,22 @@ export interface MatchedProfile extends Profile {
   challenges?: string[];
 }
 
+export interface SmartMatchProfile {
+  id: string;
+  user_id: string;
+  cupid_id?: string;
+  fullname: string;
+  age?: number;
+  location?: string;
+  occupation?: string;
+  profile_image?: string | null;
+  interests?: string[];
+}
+
 export interface SmartMatch {
-  profile: Profile;
+  id?: string;
+  user_id?: string;
+  profile: SmartMatchProfile;
   compatibility_score: number;
   compatibility_details: {
     strengths: string[];
@@ -72,8 +88,12 @@ export interface SmartMatch {
     tips: string[];
     long_term_prediction: string;
   };
-  request_status?: string;
+  request_status?: {
+    persona_view: string;
+    chat: string;
+  };
   is_favorite?: boolean;
+  last_updated?: string;
 }
 
 export interface CompatibilityInsightsProps {

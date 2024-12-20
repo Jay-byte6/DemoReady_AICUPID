@@ -83,7 +83,7 @@ const Home = () => {
       </div>
 
       {/* Profile Scanner */}
-      <ProfileScanner onProfileScanned={handleProfileScanned} />
+      <ProfileScanner onScanComplete={handleProfileScanned} />
 
       {/* Compatibility Insights Modal */}
       {selectedProfile && (

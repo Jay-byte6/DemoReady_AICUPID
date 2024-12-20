@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { Button, Dialog, DialogContent, DialogActions } from '@mui/material';
 import { Visibility } from '@mui/icons-material';
 import CompatibilityDetails from '../CompatibilityDetails';
+import { toast } from 'react-hot-toast';
 
 export const SmartMatching: React.FC = () => {
   const { user } = useAuth();
@@ -72,20 +73,39 @@ export const SmartMatching: React.FC = () => {
   };
 
   const handleViewProfile = (match: SmartMatch) => {
-    setSelectedProfile({
-      id: match.id,
-      full_name: match.target_user?.full_name || 'Anonymous',
-      age: match.target_user?.age || 'N/A',
-      location: match.target_user?.location || 'Unknown',
-      avatar_url: match.target_user?.avatar_url || '/default-avatar.png',
-      interests: match.target_user?.interests || [],
-      compatibility_score: match.compatibility_score,
-      strengths: match.strengths || [],
-      challenges: match.challenges || [],
-      tips: match.tips || [],
-      personality_traits: ['Creative', 'Ambitious', 'Empathetic']
-    });
-    setShowCompatibility(true);
+    try {
+      setSelectedProfile({
+        id: match.id || '',
+        user_id: match.user_id || '',
+        profile: {
+          id: match.profile.id,
+          user_id: match.profile.user_id,
+          fullname: match.profile.fullname,
+          age: match.profile.age,
+          location: match.profile.location,
+          occupation: match.profile.occupation,
+          profile_image: match.profile.profile_image,
+          interests: match.profile.interests
+        },
+        compatibility_score: match.compatibility_score,
+        compatibility_details: {
+          strengths: match.compatibility_details.strengths,
+          challenges: match.compatibility_details.challenges,
+          tips: match.compatibility_details.tips,
+          long_term_prediction: match.compatibility_details.long_term_prediction
+        },
+        request_status: {
+          persona_view: 'NONE',
+          chat: 'NONE'
+        },
+        is_favorite: match.is_favorite,
+        last_updated: match.last_updated
+      });
+      setShowCompatibility(true);
+    } catch (err) {
+      console.error('Error showing compatibility insights:', err);
+      toast.error('Failed to show compatibility insights');
+    }
   };
 
   if (loading) {

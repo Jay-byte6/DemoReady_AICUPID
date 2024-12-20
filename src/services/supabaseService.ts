@@ -26,6 +26,14 @@ interface CompatibilityRecord {
   last_updated: string;
 }
 
+export interface NotificationData {
+  user_id: string;
+  type: 'MATCH_REQUEST' | 'CHAT_REQUEST' | 'PROFILE_VIEW' | 'SYSTEM';
+  title: string;
+  message: string;
+  data?: Record<string, unknown>;
+}
+
 export const analyzeCompatibilityByCupidId = async (userId: string, cupidId: string) => {
   try {
     // Get target profile
@@ -878,17 +886,18 @@ export const profileService = {
     }
   },
 
-  async createNotification({ user_id, type, title, message, data = {} }) {
+  async createNotification(notification: NotificationData): Promise<void> {
     try {
       const { error } = await supabase
         .from('notifications')
         .insert({
-          user_id,
-          type,
-          title,
-          message,
-          data,
-          read: false
+          user_id: notification.user_id,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          data: notification.data || {},
+          read: false,
+          created_at: new Date().toISOString()
         });
 
       if (error) throw error;
