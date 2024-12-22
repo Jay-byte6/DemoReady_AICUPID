@@ -1057,6 +1057,33 @@ export const profileService = {
       console.error('Error adding dealbreaker:', error);
       throw error;
     }
+  },
+
+  getVisibleProfileData(profile: UserProfile): UserProfile {
+    if (!profile) return profile;
+
+    const visibilitySettings = profile.visibility_settings || {
+      persona_visible: true,
+      profile_visible: true,
+      contact_visible: true
+    };
+
+    const visibleProfile = { ...profile };
+
+    if (!visibilitySettings.profile_visible) {
+      visibleProfile.age = 0;
+      visibleProfile.location = 'Hidden';
+      visibleProfile.occupation = 'Hidden';
+      visibleProfile.relationship_history = 'Hidden';
+      visibleProfile.lifestyle = 'Hidden';
+      visibleProfile.interests = [];
+    }
+
+    if (!visibilitySettings.contact_visible) {
+      visibleProfile.profile_image = null;
+    }
+
+    return visibleProfile;
   }
 };
 

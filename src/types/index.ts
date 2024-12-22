@@ -109,6 +109,11 @@ export interface UserProfile {
   updated_at: string;
   matching_preferences?: any;
   notification_preferences?: any;
+  visibility_settings?: {
+    persona_visible?: boolean;
+    profile_visible?: boolean;
+    contact_visible?: boolean;
+  };
 }
 
 export interface PersonaTrait {
