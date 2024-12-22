@@ -11,8 +11,12 @@ interface Props {
 }
 
 const CompatibilityDetails: React.FC<Props> = ({ profile, compatibility, onBack }) => {
-  // Get current user's name from localStorage or context
-  const currentUserName = localStorage.getItem('userName') || 'You';
+  // Get current user's name from localStorage or context, with fallback
+  const currentUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') || 'You' : 'You';
+
+  // Optional chaining for profile properties
+  const profileName = profile?.fullname || 'your match';
+  const profileInterests = profile?.interests || [];
 
   return (
     <motion.div
@@ -34,7 +38,7 @@ const CompatibilityDetails: React.FC<Props> = ({ profile, compatibility, onBack 
       {/* Header with Names and Overall Score */}
       <div className="bg-white rounded-xl p-8 shadow-lg text-center">
         <h2 className="text-3xl font-bold text-gray-900 mb-6">
-          {currentUserName} & {profile.fullname}
+          {currentUserName} & {profileName}
         </h2>
         <div className="w-32 h-32 mx-auto mb-6">
           <CircularProgressbar
@@ -116,7 +120,7 @@ const CompatibilityDetails: React.FC<Props> = ({ profile, compatibility, onBack 
                 <span className="text-2xl font-bold text-indigo-600">{compatibility.emotional}%</span>
               </div>
               <p className="text-sm text-gray-600 mb-4">
-                Your emotional connection with {profile.fullname} shows strong potential for deep understanding and support.
+                Your emotional connection with {profileName} shows strong potential for deep understanding and support.
               </p>
               <ul className="text-sm text-gray-600 space-y-2">
                 <li className="flex items-center">
@@ -137,7 +141,7 @@ const CompatibilityDetails: React.FC<Props> = ({ profile, compatibility, onBack 
                 <span className="text-2xl font-bold text-indigo-600">{compatibility.intellectual}%</span>
               </div>
               <p className="text-sm text-gray-600 mb-4">
-                You and {profile.fullname} share stimulating conversations and mental compatibility.
+                You and {profileName} share stimulating conversations and mental compatibility.
               </p>
               <ul className="text-sm text-gray-600 space-y-2">
                 <li className="flex items-center">
@@ -158,7 +162,7 @@ const CompatibilityDetails: React.FC<Props> = ({ profile, compatibility, onBack 
                 <span className="text-2xl font-bold text-indigo-600">{compatibility.lifestyle}%</span>
               </div>
               <p className="text-sm text-gray-600 mb-4">
-                Your daily routines and life goals align well with {profile.fullname}'s preferences.
+                Your daily routines and life goals align well with {profileName}'s preferences.
               </p>
               <ul className="text-sm text-gray-600 space-y-2">
                 <li className="flex items-center">
@@ -223,7 +227,7 @@ const CompatibilityDetails: React.FC<Props> = ({ profile, compatibility, onBack 
                   <div>
                     <p className="text-gray-900 font-medium mb-2">{tip}</p>
                     <p className="text-sm text-blue-600">
-                      Focus on this to deepen your connection with {profile.fullname}
+                      Focus on this to deepen your connection with {profileName}
                     </p>
                   </div>
                 </div>

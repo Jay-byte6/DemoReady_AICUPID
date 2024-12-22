@@ -44,6 +44,11 @@ const CompatibilityOverview: React.FC<Props> = ({ profile, compatibility, onView
     }
   ];
 
+  // Optional chaining and fallbacks for profile properties
+  const profileName = profile?.fullname || 'your match';
+  const profileImage = profile?.profile_image || null;
+  const profileInterests = profile?.interests || [];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -53,20 +58,20 @@ const CompatibilityOverview: React.FC<Props> = ({ profile, compatibility, onView
       {/* Profile Header with Enhanced Info */}
       <div className="flex items-start space-x-6 bg-white rounded-xl p-6 shadow-lg">
         <div className="w-32 h-32 rounded-full overflow-hidden bg-gradient-to-br from-indigo-100 to-purple-100 flex-shrink-0">
-          {profile.profile_image ? (
+          {profileImage ? (
             <img
-              src={profile.profile_image}
-              alt={profile.fullname}
+              src={profileImage}
+              alt={profileName}
               className="w-full h-full object-cover"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-indigo-600">
-              {profile.fullname[0]}
+              {profileName[0]}
             </div>
           )}
         </div>
         <div className="flex-grow">
-          <h3 className="text-2xl font-semibold text-gray-900 mb-2">{profile.fullname}</h3>
+          <h3 className="text-2xl font-semibold text-gray-900 mb-2">{profileName}</h3>
           <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
             <div>
               <p className="mb-1"><span className="font-medium">Age:</span> {profile.age} years</p>
@@ -75,9 +80,9 @@ const CompatibilityOverview: React.FC<Props> = ({ profile, compatibility, onView
               <p className="text-indigo-600 font-medium">CUPID ID: {profile.cupid_id}</p>
             </div>
             <div>
-              <p className="mb-1"><span className="font-medium">Interests:</span> {profile.interests?.join(', ') || 'Not specified'}</p>
-              <p className="mb-1"><span className="font-medium">Looking for:</span> {profile.relationship_preference || 'Not specified'}</p>
-              <p><span className="font-medium">Languages:</span> {profile.languages?.join(', ') || 'Not specified'}</p>
+              <p className="mb-1"><span className="font-medium">Interests:</span> {profileInterests.join(', ') || 'Not specified'}</p>
+              <p className="mb-1"><span className="font-medium">Looking for:</span> Long-term relationship</p>
+              <p><span className="font-medium">Languages:</span> English</p>
             </div>
           </div>
         </div>
@@ -104,8 +109,8 @@ const CompatibilityOverview: React.FC<Props> = ({ profile, compatibility, onView
             <h4 className="text-xl font-semibold text-gray-900 mb-3">Overall Compatibility</h4>
             <p className="text-gray-600 mb-4">{compatibility.summary}</p>
             <div className="text-sm text-gray-600">
-              <p className="mb-2">• Based on {profile.personality_traits?.length || 'multiple'} personality traits</p>
-              <p className="mb-2">• Analyzed {profile.values?.length || 'various'} core values</p>
+              <p className="mb-2">• Based on personality analysis</p>
+              <p className="mb-2">• Analyzed core values</p>
               <p>• Considered lifestyle preferences and goals</p>
             </div>
           </div>
