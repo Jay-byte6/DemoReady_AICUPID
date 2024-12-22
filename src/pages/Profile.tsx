@@ -20,65 +20,43 @@ const Profile = () => {
   const isOwnProfile = !userId || userId === user?.id;
 
   useEffect(() => {
-    const loadProfileData = async () => {
-      if (!user) {
-        setError('Please log in to view profiles');
-        setLoading(false);
-        return;
+    if (user) {
+      loadUserProfile();
+    }
+  }, [user, userId]);
+
+  const loadUserProfile = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setLoading(true);
+      let profile;
+      if (isOwnProfile) {
+        profile = await profileService.getUserProfile(user.id);
+      } else {
+        const rawProfile = await profileService.getUserProfile(userId!);
+        profile = profileService.getVisibleProfileData(rawProfile);
       }
+      setUserProfile(profile);
 
-      try {
-        setLoading(true);
-        setError(null);
-        console.log('Loading profile data for user:', userId || user.id);
-
-        // Load user profile
-        const profile = await profileService.getUserProfile(userId || user.id);
-        console.log('Loaded profile:', profile);
-        
-        if (!profile) {
-          console.log('No profile found');
-          setError('Profile not found. Please complete your personality analysis first.');
-          setLoading(false);
-          return;
-        }
-        setUserProfile(profile);
-
-        if (isOwnProfile) {
-          // Load own profile data
-          const [positive, negative] = await Promise.all([
-            profileService.getPositivePersona(user.id),
-            profileService.getNegativePersona(user.id)
+      if (profile) {
+        // Load additional data only if viewing own profile or if persona is visible
+        if (isOwnProfile || (profile.visibility_settings?.persona_visible ?? true)) {
+          const [positiveData, negativeData] = await Promise.all([
+            profileService.getPositivePersona(userId || user.id),
+            profileService.getNegativePersona(userId || user.id)
           ]);
-
-          if (positive && negative && validatePersonaData(positive, negative)) {
-            setPositivePersona(positive);
-            setNegativePersona(negative);
-          }
-        } else {
-          // Load compatibility data for other user's profile using profileService
-          const compatibilityData = await profileService.getCompatibilityScore(user.id, userId);
-
-          if (compatibilityData) {
-            setCompatibilityScore(compatibilityData.compatibility_score);
-            setCompatibilityDetails({
-              strengths: compatibilityData.strengths || [],
-              challenges: compatibilityData.challenges || [],
-              tips: compatibilityData.improvement_tips || [],
-              long_term_prediction: compatibilityData.long_term_prediction || ''
-            });
-          }
+          setPositivePersona(positiveData);
+          setNegativePersona(negativeData);
         }
-      } catch (err: any) {
-        console.error('Error loading profile data:', err);
-        setError(err.message || 'Failed to load profile data. Please try again.');
-      } finally {
-        setLoading(false);
       }
-    };
-
-    loadProfileData();
-  }, [user, userId, isOwnProfile]);
+    } catch (error) {
+      console.error('Error loading profile:', error);
+      setError('Failed to load profile data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Helper function to validate persona data structure
   const validatePersonaData = (positive: any, negative: any): boolean => {
@@ -195,17 +173,17 @@ const Profile = () => {
             <div className="flex justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                  {userProfile.fullname || 'Anonymous User'}
+                  {userProfile?.fullname || 'Anonymous User'}
                 </h1>
                 <div className="flex items-center text-gray-600 mb-4">
                   <MapPin className="w-4 h-4 mr-1" />
-                  {userProfile.location || 'Location not set'}
+                  {userProfile?.location || 'Location hidden'}
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-sm text-gray-600 mb-1">CUPID ID</div>
                 <div className="font-mono text-lg font-semibold text-indigo-600">
-                  {userProfile.cupid_id || 'Not Generated'}
+                  {userProfile?.cupid_id || 'Not Generated'}
                 </div>
               </div>
             </div>
@@ -214,21 +192,21 @@ const Profile = () => {
               <div>
                 <div className="flex items-center text-gray-600">
                   <Mail className="w-4 h-4 mr-2" />
-                  {user?.email || 'Email not set'}
+                  {isOwnProfile ? user?.email : 'Email hidden'}
                 </div>
                 <div className="flex items-center text-gray-600 mt-2">
                   <Briefcase className="w-4 h-4 mr-2" />
-                  {userProfile.occupation || 'Occupation not set'}
+                  {userProfile?.occupation || 'Occupation hidden'}
                 </div>
               </div>
               <div>
                 <div className="flex items-center text-gray-600">
                   <Heart className="w-4 h-4 mr-2" />
-                  {userProfile.relationship_history || 'Relationship history not set'}
+                  {userProfile?.relationship_history || 'Relationship history hidden'}
                 </div>
                 <div className="flex items-center text-gray-600 mt-2">
                   <Brain className="w-4 h-4 mr-2" />
-                  {userProfile.lifestyle || 'Lifestyle not set'}
+                  {userProfile?.lifestyle || 'Lifestyle hidden'}
                 </div>
               </div>
             </div>
@@ -236,15 +214,12 @@ const Profile = () => {
         </div>
       </div>
 
-      {/* Persona Insights - for own profile */}
-      {isOwnProfile && positivePersona && negativePersona && (
-        <div className="mb-8">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Personality Analysis</h2>
-          <PersonaInsights
-            positivePersona={positivePersona}
-            negativePersona={negativePersona}
-          />
-        </div>
+      {/* Only show persona insights if viewing own profile or if persona is visible */}
+      {(isOwnProfile || (userProfile?.visibility_settings?.persona_visible ?? true)) && positivePersona && (
+        <PersonaInsights
+          positivePersona={positivePersona}
+          negativePersona={negativePersona!}
+        />
       )}
 
       {/* Compatibility Insights - for other profiles */}
