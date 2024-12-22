@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, MapPin, Briefcase, Heart, Brain, Star } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { profileService } from '../services/supabaseService';
+import profileService from '../services/supabaseService';
 import PersonaInsights from '../components/profile/PersonaInsights';
 import ProfileImageUpload from '../components/profile/ProfileImageUpload';
 import type { AIPersona, NegativePersona, UserProfile, CompatibilityDetails } from '../types';
