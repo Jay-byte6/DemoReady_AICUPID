@@ -31,6 +31,16 @@ ADD COLUMN IF NOT EXISTS matching_preferences JSONB DEFAULT '{
   "deal_breakers": []
 }'::jsonb;
 
+-- Add visibility settings to user_profiles if not exists
+ALTER TABLE user_profiles
+ADD COLUMN IF NOT EXISTS visibility_settings JSONB DEFAULT '{
+  "smart_matching_visible": true,
+  "profile_image_visible": true,
+  "occupation_visible": true,
+  "contact_visible": true,
+  "master_visibility": true
+}'::jsonb;
+
 -- Create notifications table for real-time updates
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,

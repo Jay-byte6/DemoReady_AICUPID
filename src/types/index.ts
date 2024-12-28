@@ -105,14 +105,18 @@ export interface UserProfile {
   lifestyle: string;
   interests?: string[];
   profile_image: string | null;
+  email?: string;
+  phone?: string;
   created_at: string;
   updated_at: string;
   matching_preferences?: any;
   notification_preferences?: any;
   visibility_settings?: {
-    persona_visible?: boolean;
-    profile_visible?: boolean;
+    smart_matching_visible?: boolean;
+    profile_image_visible?: boolean;
+    occupation_visible?: boolean;
     contact_visible?: boolean;
+    master_visibility?: boolean;
   };
 }
 
@@ -129,24 +133,30 @@ export interface NegativePersonaTrait {
   improvement_suggestions: string[];
 }
 
+export interface PersonaAspect {
+  traits: string[];
+  examples: string[];
+  summary: string | null;
+  intensity?: number;
+}
+
+export interface PositivePersona {
+  personality_traits: PersonaAspect;
+  core_values: PersonaAspect;
+  behavioral_traits: PersonaAspect;
+  hobbies_interests: PersonaAspect;
+}
+
 export interface NegativePersona {
-  id?: string;
-  user_id: string;
-  emotional_weaknesses: {
-    traits: string[];
-  };
-  social_weaknesses: {
-    traits: string[];
-  };
-  lifestyle_weaknesses: {
-    traits: string[];
-  };
-  relational_weaknesses: {
-    traits: string[];
-  };
-  summary: string;
-  created_at?: string;
-  updated_at?: string;
+  emotional_aspects: PersonaAspect;
+  social_aspects: PersonaAspect;
+  lifestyle_aspects: PersonaAspect;
+  relational_aspects: PersonaAspect;
+}
+
+export interface PersonaAnalysis {
+  positivePersona: PositivePersona;
+  negativePersona: NegativePersona;
 }
 
 export interface MatchRequest {
@@ -227,6 +237,13 @@ export interface SmartMatchProfile {
   occupation?: string;
   profile_image?: string | null;
   interests?: string[];
+  visibility_settings?: {
+    smart_matching_visible?: boolean;
+    profile_image_visible?: boolean;
+    occupation_visible?: boolean;
+    contact_visible?: boolean;
+    master_visibility?: boolean;
+  };
 }
 
 export interface SmartMatch {
@@ -260,8 +277,32 @@ export interface Message {
   };
 }
 
+export interface NotificationData {
+  user_id: string;
+  type: 'MATCH_REQUEST' | 'CHAT_REQUEST' | 'PROFILE_VIEW' | 'SYSTEM' | 'NEW_MATCH' | 'NEW_MESSAGE';
+  title: string;
+  message: string;
+  data?: Record<string, unknown>;
+}
+
 export interface ChatRoom {
   room_id: string;
   participants: string[];
   created_at: string;
+}
+
+export type AspectType = 
+  | 'personality_traits'
+  | 'core_values'
+  | 'behavioral_traits'
+  | 'hobbies_interests'
+  | 'emotional_aspects'
+  | 'social_aspects'
+  | 'lifestyle_aspects'
+  | 'relational_aspects';
+
+export interface PersonaAspectData extends PersonaAspect {
+  aspect_type: AspectType;
+  is_positive: boolean;
+  user_id: string;
 } 

@@ -1,86 +1,43 @@
 import { supabase } from '../lib/supabase';
-import { SmartMatch, FavoriteProfile, UserProfile, CompatibilityInsight } from '../types';
-import { generatePersonaAnalysis, analyzeCompatibility } from './openai';
+import { 
+  UserProfile, 
+  PersonaAnalysis, 
+  PersonaAspect, 
+  AspectType, 
+  CompatibilityScore,
+  PositivePersona,
+  NegativePersona,
+  SmartMatch,
+  NotificationData
+} from '../types';
+import { generateDetailedPersonaAnalysis, analyzeDetailedCompatibility } from './openai';
 
-interface FavoriteRecord {
-  id: string;
-  user_id: string;
-  favorite_user_id: string;
-  created_at: string;
-}
-
-interface CompatibilityRecord {
-  id: string;
-  user_id: string;
-  target_user_id: string;
-  compatibility_score: number;
+interface StoredCompatibilityScore {
+  overall_score: number;
+  emotional_score: number;
+  intellectual_score: number;
+  lifestyle_score: number;
   summary: string;
-  long_term_prediction: string;
   strengths: string[];
   challenges: string[];
-  individual_challenges: {
-    user_challenges: string[];
-    target_challenges: string[];
-  };
-  improvement_tips: string[];
-  last_updated: string;
+  tips: string[];
+  long_term_prediction: string;
 }
 
-export interface NotificationData {
+interface PersonaVersion {
+  id: string;
   user_id: string;
-  type: 'MATCH_REQUEST' | 'CHAT_REQUEST' | 'PROFILE_VIEW' | 'SYSTEM';
-  title: string;
-  message: string;
-  data?: Record<string, unknown>;
+  version: number;
+  positive_aspects: any[];
+  negative_aspects: any[];
+  trigger_type: 'AUTO' | 'MANUAL' | 'PROFILE_UPDATE' | 'PERSONALITY_TEST';
+  created_at: string;
+  profile_snapshot: Partial<UserProfile>;
+  personality_snapshot: any;
 }
-
-export const analyzeCompatibilityByCupidId = async (userId: string, cupidId: string) => {
-  try {
-    // Get target profile
-    const { data: targetProfile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('cupid_id', cupidId)
-      .single();
-
-    if (profileError) throw profileError;
-
-    // Get user profile
-    const { data: userProfile, error: userError } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-
-    if (userError) throw userError;
-
-    // Calculate compatibility
-    const compatibility = await generatePersonaAnalysis({
-      user1: userProfile,
-      user2: targetProfile
-    });
-
-    return {
-      targetProfile,
-      compatibility: {
-        score: compatibility.score || 0,
-        insights: compatibility.strengths || [],
-        details: {
-          strengths: compatibility.strengths || [],
-          challenges: compatibility.challenges || [],
-          tips: compatibility.tips || [],
-          long_term_prediction: compatibility.long_term_prediction || ''
-        }
-      }
-    };
-  } catch (error) {
-    console.error('Error analyzing compatibility:', error);
-    throw error;
-  }
-};
 
 export const profileService = {
-  async getUserProfile(userId: string) {
+  async getUserProfile(userId: string): Promise<UserProfile | null> {
     try {
       console.log('Fetching user profile for:', userId);
       const { data, error } = await supabase
@@ -91,21 +48,53 @@ export const profileService = {
 
       if (error) {
         console.error('Supabase error fetching profile:', error);
-        throw error;
+        return null;
       }
 
-      console.log('Fetched profile data:', data);
-      return data;
+      if (!data) {
+        console.log('No profile found, creating default profile for user:', userId);
+        // Create a default profile with minimal required fields
+        const defaultProfile = {
+          user_id: userId,
+          cupid_id: `CUPID-${userId.substring(0, 6).toUpperCase()}`,
+          fullname: '',
+          age: 0,
+          location: '',
+          gender: '',
+          occupation: '',
+          relationship_history: '',
+          lifestyle: '',
+          profile_image: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: newProfile, error: createError } = await supabase
+          .from('user_profiles')
+          .insert(defaultProfile)
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('Error creating default profile:', createError);
+          return null;
+        }
+
+        // Generate initial persona analysis for the new profile
+        await this.generateAndStorePersonaAnalysis(userId);
+        return newProfile;
+      }
+
+      return data as UserProfile;
     } catch (error) {
       console.error('Error getting user profile:', error);
-      throw error;
+      return null;
     }
   },
 
-  async updateUserProfile(userId: string, profile: any) {
+  async updateUserProfile(userId: string, profile: Partial<UserProfile>): Promise<UserProfile | null> {
     try {
       console.log('Updating profile for user:', userId);
-      console.log('Profile data to update:', profile);
       
       // First check if profile exists
       const existingProfile = await this.getUserProfile(userId);
@@ -124,459 +113,657 @@ export const profileService = {
 
       if (error) {
         console.error('Supabase error updating profile:', error);
-        throw error;
+        return null;
       }
 
-      console.log('Profile updated successfully:', data);
-      return data;
+      // Check if relevant fields changed and trigger persona generation
+      const relevantFieldsChanged = this.haveRelevantFieldsChanged(
+        existingProfile,
+        { ...existingProfile, ...profile },
+        null,
+        null
+      );
+
+      if (relevantFieldsChanged) {
+        // Trigger persona generation in the background
+        this.generateAndStorePersonaAnalysis(userId, true, 'PROFILE_UPDATE')
+          .catch(error => console.error('Error generating persona after profile update:', error));
+      }
+
+      return data as UserProfile;
     } catch (error) {
       console.error('Error updating user profile:', error);
-      throw error;
+      return null;
     }
   },
 
-  async getPersonalityAnalysis(userId: string) {
+  async generateAndStorePersonaAnalysis(userId: string, forceRegenerate: boolean = false, triggerType: 'AUTO' | 'MANUAL' | 'PROFILE_UPDATE' | 'PERSONALITY_TEST' = 'AUTO'): Promise<PersonaAnalysis | null> {
     try {
-      console.log('Fetching personality analysis for user:', userId);
-      const { data, error } = await supabase
-        .from('personality_analysis')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Supabase error fetching analysis:', error);
-        throw error;
-      }
-
-      console.log('Fetched personality analysis:', data);
-      return data;
-    } catch (error) {
-      console.error('Error getting personality analysis:', error);
-      throw error;
-    }
-  },
-
-  async savePersonalityAnalysis(userId: string, analysis: any) {
-    try {
-      console.log('Saving personality analysis for user:', userId);
-      console.log('Analysis data to save:', analysis);
+      // Show loading indicator
+      this.notifyPersonaGenerationStatus('start');
       
-      // First get the user profile to get its ID
       const userProfile = await this.getUserProfile(userId);
       if (!userProfile) {
-        throw new Error('User profile not found');
-      }
-
-      // First check if analysis exists
-      const existingAnalysis = await this.getPersonalityAnalysis(userId);
-      
-      // Format the data with snake_case keys
-      const formattedAnalysis = {
-        user_id: userId,
-        profile_id: userProfile.id,
-        preferences: analysis.preferences || {},
-        psychological_profile: analysis.psychologicalProfile || {},
-        relationship_goals: analysis.relationshipGoals || {},
-        behavioral_insights: analysis.behavioralInsights || {},
-        dealbreakers: analysis.dealbreakers || {},
-        created_at: existingAnalysis?.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      const { data, error } = await supabase
-        .from('personality_analysis')
-        .upsert({
-          ...formattedAnalysis,
-          id: existingAnalysis?.id || undefined
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase error saving analysis:', error);
-        throw error;
-      }
-
-      console.log('Analysis saved successfully:', data);
-
-      // Generate and save AI personas
-      const personalityData = {
-        profile: userProfile,
-        analysis: data
-      };
-
-      console.log('Generating AI personas with data:', personalityData);
-      const personas = await generatePersonaAnalysis(personalityData);
-
-      // Save positive persona
-      await this.savePositivePersona(userId, personas.positive_persona);
-      
-      // Save negative persona
-      await this.saveNegativePersona(userId, personas.negative_persona);
-
-      return data;
-    } catch (error) {
-      console.error('Error saving personality analysis:', error);
-      throw error;
-    }
-  },
-
-  async getPositivePersona(userId: string) {
-    try {
-      console.log('Fetching positive persona for user:', userId);
-      const { data, error } = await supabase
-        .from('positive_personas')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Supabase error fetching positive persona:', error);
-        throw error;
-      }
-
-      if (!data) {
-        console.log('No positive persona found');
+        console.warn('Profile not found for user:', userId);
+        this.notifyPersonaGenerationStatus('error', 'Profile not found');
         return null;
       }
 
-      // Transform the data to ensure correct structure
-      const transformedData = {
-        ...data,
-        personality_traits: {
-          examples: Array.isArray(data.personality_traits) ? 
-            data.personality_traits : 
-            Array.isArray(data.personality_traits?.examples) ? 
-              data.personality_traits.examples : []
-        },
-        core_values: {
-          examples: Array.isArray(data.core_values) ? 
-            data.core_values : 
-            Array.isArray(data.core_values?.examples) ? 
-              data.core_values.examples : []
-        },
-        behavioral_traits: {
-          examples: Array.isArray(data.behavioral_traits) ? 
-            data.behavioral_traits : 
-            Array.isArray(data.behavioral_traits?.examples) ? 
-              data.behavioral_traits.examples : []
-        },
-        hobbies_interests: {
-          examples: Array.isArray(data.hobbies_interests) ? 
-            data.hobbies_interests : 
-            Array.isArray(data.hobbies_interests?.examples) ? 
-              data.hobbies_interests.examples : []
+      // Generate new persona analysis using OpenAI
+      console.log('Generating new persona analysis using OpenAI');
+      let personaAnalysis = await generateDetailedPersonaAnalysis(
+        userProfile,
+        {
+          messages: [],
+          aiChat: [],
+          personalityData: null
         }
-      };
+      );
 
-      console.log('Transformed positive persona:', JSON.stringify(transformedData, null, 2));
-      return transformedData;
-    } catch (error) {
-      console.error('Error getting positive persona:', error);
-      throw error;
-    }
-  },
-
-  async savePositivePersona(userId: string, persona: any) {
-    try {
-      console.log('Saving positive persona for user:', userId);
-      console.log('Raw persona data to save:', JSON.stringify(persona, null, 2));
-      
-      // Transform the data structure
-      const structuredPersona = {
-        user_id: userId,
-        personality_traits: {
-          examples: Array.isArray(persona.personality_traits) ? 
-            persona.personality_traits : 
-            Array.isArray(persona.personality_traits?.examples) ? 
-              persona.personality_traits.examples : []
-        },
-        core_values: {
-          examples: Array.isArray(persona.core_values) ? 
-            persona.core_values : 
-            Array.isArray(persona.core_values?.examples) ? 
-              persona.core_values.examples : []
-        },
-        behavioral_traits: {
-          examples: Array.isArray(persona.behavioral_traits) ? 
-            persona.behavioral_traits : 
-            Array.isArray(persona.behavioral_traits?.examples) ? 
-              persona.behavioral_traits.examples : []
-        },
-        hobbies_interests: {
-          examples: Array.isArray(persona.hobbies_interests) ? 
-            persona.hobbies_interests : 
-            Array.isArray(persona.hobbies_interests?.examples) ? 
-              persona.hobbies_interests.examples : []
-        },
-        summary: typeof persona.summary === 'string' ? persona.summary : ''
-      };
-
-      console.log('Structured positive persona data:', JSON.stringify(structuredPersona, null, 2));
-      
-      const existingPersona = await this.getPositivePersona(userId);
-      
-      const { data, error } = await supabase
-        .from('positive_personas')
-        .upsert({
-          ...structuredPersona,
-          id: existingPersona?.id || undefined,
-          created_at: existingPersona?.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase error saving positive persona:', error);
-        throw error;
-      }
-
-      console.log('Positive persona saved successfully:', JSON.stringify(data, null, 2));
-      return data;
-    } catch (error) {
-      console.error('Error saving positive persona:', error);
-      throw error;
-    }
-  },
-
-  async getNegativePersona(userId: string) {
-    try {
-      console.log('Fetching negative persona for user:', userId);
-      const { data, error } = await supabase
-        .from('negative_personas')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Supabase error fetching negative persona:', error);
-        throw error;
-      }
-
-      if (!data) {
-        console.log('No negative persona found');
+      if (!personaAnalysis || !personaAnalysis.positivePersona || !personaAnalysis.negativePersona) {
+        console.warn('Failed to generate complete persona analysis');
+        this.notifyPersonaGenerationStatus('error', 'Failed to generate analysis');
         return null;
       }
 
-      // Transform the data to ensure correct structure
-      const transformedData = {
-        ...data,
-        emotional_weaknesses: {
-          traits: Array.isArray(data.emotional_weaknesses) ? 
-            data.emotional_weaknesses : 
-            Array.isArray(data.emotional_weaknesses?.traits) ? 
-              data.emotional_weaknesses.traits : []
+      // Delete existing aspects first
+      const { error: deleteError } = await supabase
+        .from('persona_aspects')
+        .delete()
+        .eq('user_id', userId);
+
+      if (deleteError) {
+        console.error('Error deleting existing aspects:', deleteError);
+        this.notifyPersonaGenerationStatus('error', 'Failed to update persona');
+        return null;
+      }
+
+      // Generate unique IDs for each aspect
+      const timestamp = new Date().toISOString();
+      
+      // Helper function to ensure arrays are properly formatted for JSONB
+      const formatArrayField = (field: any[]): any[] => {
+        if (!Array.isArray(field)) return [];
+        return field.map(item => {
+          if (typeof item === 'string') return item;
+          return String(item);
+        });
+      };
+
+      // Prepare aspects with proper data formatting
+      const aspects = [
+        // Positive aspects
+        {
+          user_id: userId,
+          aspect_type: 'personality_traits',
+          traits: formatArrayField(personaAnalysis.positivePersona.personality_traits.traits),
+          examples: formatArrayField(personaAnalysis.positivePersona.personality_traits.examples),
+          summary: personaAnalysis.positivePersona.personality_traits.summary || '',
+          intensity: personaAnalysis.positivePersona.personality_traits.intensity || 0,
+          is_positive: true,
+          created_at: timestamp,
+          updated_at: timestamp
         },
-        social_weaknesses: {
-          traits: Array.isArray(data.social_weaknesses) ? 
-            data.social_weaknesses : 
-            Array.isArray(data.social_weaknesses?.traits) ? 
-              data.social_weaknesses.traits : []
+        {
+          user_id: userId,
+          aspect_type: 'core_values',
+          traits: formatArrayField(personaAnalysis.positivePersona.core_values.traits),
+          examples: formatArrayField(personaAnalysis.positivePersona.core_values.examples),
+          summary: personaAnalysis.positivePersona.core_values.summary || '',
+          intensity: personaAnalysis.positivePersona.core_values.intensity || 0,
+          is_positive: true,
+          created_at: timestamp,
+          updated_at: timestamp
         },
-        lifestyle_weaknesses: {
-          traits: Array.isArray(data.lifestyle_weaknesses) ? 
-            data.lifestyle_weaknesses : 
-            Array.isArray(data.lifestyle_weaknesses?.traits) ? 
-              data.lifestyle_weaknesses.traits : []
+        {
+          user_id: userId,
+          aspect_type: 'behavioral_traits',
+          traits: formatArrayField(personaAnalysis.positivePersona.behavioral_traits.traits),
+          examples: formatArrayField(personaAnalysis.positivePersona.behavioral_traits.examples),
+          summary: personaAnalysis.positivePersona.behavioral_traits.summary || '',
+          intensity: personaAnalysis.positivePersona.behavioral_traits.intensity || 0,
+          is_positive: true,
+          created_at: timestamp,
+          updated_at: timestamp
         },
-        relational_weaknesses: {
-          traits: Array.isArray(data.relational_weaknesses) ? 
-            data.relational_weaknesses : 
-            Array.isArray(data.relational_weaknesses?.traits) ? 
-              data.relational_weaknesses.traits : []
+        {
+          user_id: userId,
+          aspect_type: 'hobbies_interests',
+          traits: formatArrayField(personaAnalysis.positivePersona.hobbies_interests.traits),
+          examples: formatArrayField(personaAnalysis.positivePersona.hobbies_interests.examples),
+          summary: personaAnalysis.positivePersona.hobbies_interests.summary || '',
+          intensity: personaAnalysis.positivePersona.hobbies_interests.intensity || 0,
+          is_positive: true,
+          created_at: timestamp,
+          updated_at: timestamp
+        },
+        // Negative aspects
+        {
+          user_id: userId,
+          aspect_type: 'emotional_aspects',
+          traits: formatArrayField(personaAnalysis.negativePersona.emotional_aspects.traits),
+          examples: formatArrayField(personaAnalysis.negativePersona.emotional_aspects.examples),
+          summary: personaAnalysis.negativePersona.emotional_aspects.summary || '',
+          intensity: personaAnalysis.negativePersona.emotional_aspects.intensity || 0,
+          is_positive: false,
+          created_at: timestamp,
+          updated_at: timestamp
+        },
+        {
+          user_id: userId,
+          aspect_type: 'social_aspects',
+          traits: formatArrayField(personaAnalysis.negativePersona.social_aspects.traits),
+          examples: formatArrayField(personaAnalysis.negativePersona.social_aspects.examples),
+          summary: personaAnalysis.negativePersona.social_aspects.summary || '',
+          intensity: personaAnalysis.negativePersona.social_aspects.intensity || 0,
+          is_positive: false,
+          created_at: timestamp,
+          updated_at: timestamp
+        },
+        {
+          user_id: userId,
+          aspect_type: 'lifestyle_aspects',
+          traits: formatArrayField(personaAnalysis.negativePersona.lifestyle_aspects.traits),
+          examples: formatArrayField(personaAnalysis.negativePersona.lifestyle_aspects.examples),
+          summary: personaAnalysis.negativePersona.lifestyle_aspects.summary || '',
+          intensity: personaAnalysis.negativePersona.lifestyle_aspects.intensity || 0,
+          is_positive: false,
+          created_at: timestamp,
+          updated_at: timestamp
+        },
+        {
+          user_id: userId,
+          aspect_type: 'relational_aspects',
+          traits: formatArrayField(personaAnalysis.negativePersona.relational_aspects.traits),
+          examples: formatArrayField(personaAnalysis.negativePersona.relational_aspects.examples),
+          summary: personaAnalysis.negativePersona.relational_aspects.summary || '',
+          intensity: personaAnalysis.negativePersona.relational_aspects.intensity || 0,
+          is_positive: false,
+          created_at: timestamp,
+          updated_at: timestamp
+        }
+      ];
+
+      // Log the data being stored
+      console.log('Storing persona aspects:', JSON.stringify(aspects, null, 2));
+
+      // Store all aspects
+      const { error: insertError } = await supabase
+        .from('persona_aspects')
+        .insert(aspects);
+
+      if (insertError) {
+        console.error('Error storing persona aspects:', insertError);
+        this.notifyPersonaGenerationStatus('error', 'Failed to store persona');
+        return null;
+      }
+
+      // Notify completion
+      this.notifyPersonaGenerationStatus('complete');
+      return personaAnalysis;
+    } catch (error) {
+      console.error('Error generating and storing persona analysis:', error);
+      this.notifyPersonaGenerationStatus('error', 'Generation failed');
+      return null;
+    }
+  },
+
+  notifyPersonaGenerationStatus(status: 'start' | 'complete' | 'error', message?: string) {
+    // Dispatch custom event for UI updates
+    const event = new CustomEvent('personaGenerationStatus', {
+      detail: { status, message }
+    });
+    window.dispatchEvent(event);
+  },
+
+  async shouldRegeneratePersona(userId: string): Promise<boolean> {
+    try {
+      // Get latest persona version
+      const { data: latestVersion } = await supabase
+        .from('persona_versions')
+        .select('created_at, profile_snapshot, personality_snapshot')
+        .eq('user_id', userId)
+        .order('version', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!latestVersion) return true;
+
+      // Get current profile and personality data
+      const [profile, personalityData] = await Promise.all([
+        this.getUserProfile(userId),
+        supabase
+          .from('user_profiles')
+          .select('personality_data')
+          .eq('user_id', userId)
+          .single()
+      ]);
+
+      if (!profile) return true;
+
+      // Compare relevant fields
+      const relevantFieldsChanged = this.haveRelevantFieldsChanged(
+        latestVersion.profile_snapshot,
+        profile,
+        latestVersion.personality_snapshot,
+        personalityData?.data?.personality_data
+      );
+
+      return relevantFieldsChanged;
+    } catch (error) {
+      console.error('Error checking persona regeneration:', error);
+      return false;
+    }
+  },
+
+  haveRelevantFieldsChanged(oldProfile: any, newProfile: any, oldPersonality: any, newPersonality: any): boolean {
+    const relevantFields = [
+      'fullname',
+      'age',
+      'location',
+      'occupation',
+      'relationship_history',
+      'lifestyle',
+      'interests'
+    ];
+
+    // Check profile changes
+    const profileChanged = relevantFields.some(field => 
+      JSON.stringify(oldProfile?.[field]) !== JSON.stringify(newProfile?.[field])
+    );
+
+    // Check personality data changes
+    const personalityChanged = JSON.stringify(oldPersonality) !== JSON.stringify(newPersonality);
+
+    return profileChanged || personalityChanged;
+  },
+
+  createDefaultPersonaAspect(): PersonaAspect {
+    return {
+      traits: [],
+      examples: [],
+      summary: null,
+      intensity: 0
+    };
+  },
+
+  async getPersonaAnalysis(userId: string): Promise<PersonaAnalysis | null> {
+    try {
+      // First check if user profile exists
+      const profile = await this.getUserProfile(userId);
+      if (!profile) {
+        console.warn('User profile not found:', userId);
+        return null;
+      }
+
+      // Get all persona aspects
+      const { data: aspects, error } = await supabase
+        .from('persona_aspects')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Error fetching persona aspects:', error);
+        return null;
+      }
+
+      if (!aspects || aspects.length === 0) {
+        console.log('No existing analysis found, generating new one...');
+        return await this.generateAndStorePersonaAnalysis(userId);
+      }
+
+      // Transform aspects into PersonaAnalysis structure
+      const positiveAspects = aspects.filter(a => a.is_positive);
+      const negativeAspects = aspects.filter(a => !a.is_positive);
+
+      const transformedAnalysis: PersonaAnalysis = {
+        positivePersona: {
+          personality_traits: this.transformStoredAspect(positiveAspects.find(a => a.aspect_type === 'personality_traits')),
+          core_values: this.transformStoredAspect(positiveAspects.find(a => a.aspect_type === 'core_values')),
+          behavioral_traits: this.transformStoredAspect(positiveAspects.find(a => a.aspect_type === 'behavioral_traits')),
+          hobbies_interests: this.transformStoredAspect(positiveAspects.find(a => a.aspect_type === 'hobbies_interests'))
+        },
+        negativePersona: {
+          emotional_aspects: this.transformStoredAspect(negativeAspects.find(a => a.aspect_type === 'emotional_aspects')),
+          social_aspects: this.transformStoredAspect(negativeAspects.find(a => a.aspect_type === 'social_aspects')),
+          lifestyle_aspects: this.transformStoredAspect(negativeAspects.find(a => a.aspect_type === 'lifestyle_aspects')),
+          relational_aspects: this.transformStoredAspect(negativeAspects.find(a => a.aspect_type === 'relational_aspects'))
         }
       };
 
-      console.log('Transformed negative persona:', JSON.stringify(transformedData, null, 2));
-      return transformedData;
+      return transformedAnalysis;
     } catch (error) {
-      console.error('Error getting negative persona:', error);
-      throw error;
+      console.error('Error getting persona analysis:', error);
+      return null;
     }
   },
 
-  async saveNegativePersona(userId: string, persona: any) {
-    try {
-      console.log('Saving negative persona for user:', userId);
-      console.log('Raw persona data to save:', JSON.stringify(persona, null, 2));
-      
-      // Transform the data structure
-      const structuredPersona = {
-        user_id: userId,
-        emotional_weaknesses: {
-          traits: Array.isArray(persona.emotional_weaknesses) ? 
-            persona.emotional_weaknesses : 
-            Array.isArray(persona.emotional_weaknesses?.traits) ? 
-              persona.emotional_weaknesses.traits : []
-        },
-        social_weaknesses: {
-          traits: Array.isArray(persona.social_weaknesses) ? 
-            persona.social_weaknesses : 
-            Array.isArray(persona.social_weaknesses?.traits) ? 
-              persona.social_weaknesses.traits : []
-        },
-        lifestyle_weaknesses: {
-          traits: Array.isArray(persona.lifestyle_weaknesses) ? 
-            persona.lifestyle_weaknesses : 
-            Array.isArray(persona.lifestyle_weaknesses?.traits) ? 
-              persona.lifestyle_weaknesses.traits : []
-        },
-        relational_weaknesses: {
-          traits: Array.isArray(persona.relational_weaknesses) ? 
-            persona.relational_weaknesses : 
-            Array.isArray(persona.relational_weaknesses?.traits) ? 
-              persona.relational_weaknesses.traits : []
-        },
-        summary: typeof persona.summary === 'string' ? persona.summary : ''
+  transformStoredAspect(aspect: any): PersonaAspect {
+    if (!aspect) {
+      return {
+        traits: [],
+        examples: [],
+        summary: null,
+        intensity: 0
       };
-
-      console.log('Structured negative persona data:', JSON.stringify(structuredPersona, null, 2));
-      
-      const existingPersona = await this.getNegativePersona(userId);
-      
-      const { data, error } = await supabase
-        .from('negative_personas')
-        .upsert({
-          ...structuredPersona,
-          id: existingPersona?.id || undefined,
-          created_at: existingPersona?.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase error saving negative persona:', error);
-        throw error;
-      }
-
-      console.log('Negative persona saved successfully:', JSON.stringify(data, null, 2));
-      return data;
-    } catch (error) {
-      console.error('Error saving negative persona:', error);
-      throw error;
     }
+
+    return {
+      traits: Array.isArray(aspect.traits) ? aspect.traits : [],
+      examples: Array.isArray(aspect.examples) ? aspect.examples : [],
+      summary: aspect.summary || null,
+      intensity: typeof aspect.intensity === 'number' ? aspect.intensity : 0
+    };
   },
 
-  async getCompatibilityScore(userId: string, targetUserId: string) {
+  createPersonaAspect(userId: string, aspectType: AspectType, aspect: PersonaAspect, isPositive: boolean) {
+    return {
+      user_id: userId,
+      aspect_type: aspectType,
+      traits: aspect.traits,
+      examples: aspect.examples,
+      summary: aspect.summary,
+      intensity: aspect.intensity,
+      is_positive: isPositive
+    };
+  },
+
+  async getCompatibilityAnalysis(userId: string, targetUserId: string): Promise<CompatibilityScore | null> {
     try {
-      const { data, error } = await supabase
+      // First check if we have a stored compatibility score
+      const { data: storedScore } = await supabase
         .from('compatibility_scores')
         .select('*')
         .eq('user_id', userId)
         .eq('target_user_id', targetUserId)
-        .maybeSingle();
+        .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
-      return data;
-    } catch (error) {
-      console.error('Error getting compatibility score:', error);
-      throw error;
-    }
-  },
+      if (storedScore) {
+        return this.transformAIResponseToCompatibilityScore(storedScore as StoredCompatibilityScore);
+      }
 
-  async calculateCompatibility(userId: string, targetUserId: string) {
-    try {
-      // Get both user profiles and their analyses
-      const [userProfile, targetProfile, userAnalysis, targetAnalysis] = await Promise.all([
+      // If no stored score, generate a new one
+      const [userProfile, targetProfile] = await Promise.all([
         this.getUserProfile(userId),
-        this.getUserProfile(targetUserId),
-        this.getPersonalityAnalysis(userId),
-        this.getPersonalityAnalysis(targetUserId)
+        this.getUserProfile(targetUserId)
       ]);
 
       if (!userProfile || !targetProfile) {
-        throw new Error('One or both profiles not found');
+        console.warn('One or both profiles not found');
+        return null;
       }
 
-      // Generate compatibility analysis using OpenAI
-      const compatibilityResult = await analyzeCompatibility({
-        user1: { profile: userProfile, analysis: userAnalysis },
-        user2: { profile: targetProfile, analysis: targetAnalysis }
-      });
+      const [userPersona, targetPersona] = await Promise.all([
+        this.getPersonaAnalysis(userId),
+        this.getPersonaAnalysis(targetUserId)
+      ]);
 
-      return {
-        compatibility_score: Math.round(compatibilityResult.compatibility_score * 100),
-        strengths: compatibilityResult.strengths || [],
-        challenges: compatibilityResult.challenges || [],
-        tips: compatibilityResult.improvement_tips || [],
-        long_term_prediction: compatibilityResult.long_term_prediction || ''
-      };
+      const compatibilityScore = await analyzeDetailedCompatibility(
+        userProfile,
+        targetProfile,
+        userPersona && targetPersona ? {
+          persona1: userPersona,
+          persona2: targetPersona
+        } : undefined
+      );
+
+      // Store the new compatibility score
+      if (compatibilityScore) {
+        const { error: storeError } = await supabase
+          .from('compatibility_scores')
+          .upsert({
+            user_id: userId,
+            target_user_id: targetUserId,
+            overall_score: compatibilityScore.overall,
+            emotional_score: compatibilityScore.emotional,
+            intellectual_score: compatibilityScore.intellectual,
+            lifestyle_score: compatibilityScore.lifestyle,
+            summary: compatibilityScore.summary,
+            strengths: compatibilityScore.strengths,
+            challenges: compatibilityScore.challenges,
+            tips: compatibilityScore.tips,
+            long_term_prediction: compatibilityScore.long_term_prediction,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+        if (storeError) {
+          console.error('Error storing compatibility score:', storeError);
+        }
+      }
+
+      return compatibilityScore;
     } catch (error) {
-      console.error('Error calculating compatibility:', error);
-      throw error;
+      console.error('Error getting compatibility analysis:', error);
+      return null;
     }
+  },
+
+  transformAIResponseToCompatibilityScore(analysis: StoredCompatibilityScore): CompatibilityScore {
+    return {
+      overall: analysis.overall_score,
+      emotional: analysis.emotional_score,
+      intellectual: analysis.intellectual_score,
+      lifestyle: analysis.lifestyle_score,
+      summary: analysis.summary,
+      strengths: analysis.strengths,
+      challenges: analysis.challenges,
+      tips: analysis.tips,
+      long_term_prediction: analysis.long_term_prediction
+    };
   },
 
   async findTopMatches(userId: string): Promise<SmartMatch[]> {
     try {
-      // First get all user profiles except the current user
-      const { data: profiles, error: profilesError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .neq('user_id', userId);
-
-      if (profilesError) throw profilesError;
-
-      // Get compatibility insights for these profiles
-      const { data: matches, error: matchesError } = await supabase
+      // First try to get stored matches
+      const { data: storedMatches, error: storedError } = await supabase
         .from('smart_matches')
         .select('*')
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .order('compatibility_score', { ascending: false })
+        .limit(20);
 
-      if (matchesError) throw matchesError;
+      if (storedError) {
+        console.error('Error fetching stored matches:', storedError);
+      }
 
-      // Get favorite profiles
-      const { data: favorites, error: favoritesError } = await supabase
+      // Get all profiles except the user's own profile
+      const { data: profiles, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select(`
+          id,
+          user_id,
+          cupid_id,
+          fullname,
+          age,
+          location,
+          occupation,
+          profile_image,
+          visibility_settings
+        `)
+        .neq('user_id', userId);
+
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        return [];
+      }
+
+      // Filter out profiles where visibility is turned off
+      const visibleProfiles = (profiles || []).filter(profile => {
+        if (!profile.visibility_settings) return true;
+        return profile.visibility_settings.master_visibility !== false && 
+               profile.visibility_settings.smart_matching_visible !== false;
+      });
+
+      // Get favorites
+      const { data: favorites } = await supabase
         .from('favorite_profiles')
         .select('favorite_user_id')
         .eq('user_id', userId);
 
-      if (favoritesError) throw favoritesError;
+      const favoriteIds = new Set(favorites?.map(f => f.favorite_user_id) || []);
 
-      const favoriteIds = (favorites || []).map(f => f.favorite_user_id);
-      const matchesMap = new Map(matches?.map(m => [m.target_user_id, m]));
+      // If we have stored matches and they're not too old, use them
+      if (storedMatches && storedMatches.length > 0) {
+        const oldestMatch = storedMatches.reduce((oldest, current) => {
+          return new Date(current.last_updated) < new Date(oldest.last_updated) ? current : oldest;
+        }, storedMatches[0]);
 
-      // Combine the data
-      const smartMatches: SmartMatch[] = (profiles || []).map(profile => {
-        const match = matchesMap.get(profile.user_id) || {};
-        return {
-          profile: {
-            id: profile.id,
-            user_id: profile.user_id,
-            fullname: profile.fullname,
-            age: profile.age,
-            location: profile.location,
-            profile_image: profile.profile_image,
-            interests: profile.interests
-          },
-          compatibility_score: match.compatibility_score || 0,
-          compatibility_details: {
-            strengths: match.strengths || [],
-            challenges: match.challenges || [],
-            tips: match.tips || [],
-            long_term_prediction: match.long_term_prediction || ''
-          },
-          request_status: {
-            persona_view: 'NONE',
-            chat: 'NONE'
-          },
-          is_favorite: favoriteIds.includes(profile.user_id),
-          last_updated: match.last_updated
-        };
+        // Transform stored matches into SmartMatch format
+        const transformedMatches: SmartMatch[] = storedMatches
+          .map(match => {
+            const profile = visibleProfiles.find(p => p.user_id === match.target_user_id);
+            if (!profile) return null;
+
+            const smartMatch: SmartMatch = {
+              profile: {
+                id: profile.id,
+                user_id: profile.user_id,
+                cupid_id: profile.cupid_id,
+                fullname: profile.fullname,
+                age: profile.age,
+                location: profile.location,
+                occupation: profile.occupation,
+                profile_image: profile.profile_image
+              },
+              compatibility_score: match.compatibility_score,
+              compatibility_details: {
+                strengths: match.strengths || [],
+                challenges: match.challenges || [],
+                tips: match.tips || [],
+                long_term_prediction: match.long_term_prediction || ''
+              },
+              is_favorite: favoriteIds.has(profile.user_id),
+              last_updated: match.last_updated
+            };
+            return smartMatch;
+          })
+          .filter((match): match is SmartMatch => match !== null);
+
+        if (transformedMatches.length > 0) {
+          return transformedMatches;
+        }
+      }
+
+      // Generate new matches
+      const matchPromises = visibleProfiles.map(async (profile) => {
+        try {
+          const compatibilityScore = await this.getCompatibilityAnalysis(userId, profile.user_id);
+          if (!compatibilityScore) return null;
+
+          // Store the match in Supabase
+          const { error: insertError } = await supabase
+            .from('smart_matches')
+            .upsert({
+              user_id: userId,
+              target_user_id: profile.user_id,
+              compatibility_score: compatibilityScore.overall,
+              strengths: compatibilityScore.strengths,
+              challenges: compatibilityScore.challenges,
+              tips: compatibilityScore.tips,
+              long_term_prediction: compatibilityScore.long_term_prediction,
+              last_updated: new Date().toISOString()
+            });
+
+          if (insertError) {
+            console.error('Error storing match:', insertError);
+          }
+
+          const match: SmartMatch = {
+            profile: {
+              id: profile.id,
+              user_id: profile.user_id,
+              cupid_id: profile.cupid_id || undefined,
+              fullname: profile.fullname,
+              age: profile.age,
+              location: profile.location,
+              occupation: profile.occupation,
+              profile_image: profile.profile_image
+            },
+            compatibility_score: compatibilityScore.overall,
+            compatibility_details: {
+              strengths: compatibilityScore.strengths,
+              challenges: compatibilityScore.challenges,
+              tips: compatibilityScore.tips,
+              long_term_prediction: compatibilityScore.long_term_prediction
+            },
+            is_favorite: favoriteIds.has(profile.user_id),
+            last_updated: new Date().toISOString()
+          };
+          return match;
+        } catch (error) {
+          console.error(`Error getting compatibility for profile ${profile.id}:`, error);
+          return null;
+        }
       });
 
-      // Sort by compatibility score
-      return smartMatches.sort((a, b) => b.compatibility_score - a.compatibility_score);
+      const matches = await Promise.all(matchPromises);
+
+      // Filter out null results, sort by compatibility score, and take top 20
+      return matches
+        .filter((match): match is SmartMatch => match !== null)
+        .sort((a, b) => b.compatibility_score - a.compatibility_score)
+        .slice(0, 20);
     } catch (error) {
       console.error('Error finding top matches:', error);
-      throw error;
+      return [];
     }
   },
 
-  // Notification methods
+  async toggleFavorite(userId: string, targetUserId: string, isFavorite: boolean): Promise<boolean> {
+    try {
+      if (isFavorite) {
+        // Add to favorites
+        const { error: insertError } = await supabase
+          .from('favorite_profiles')
+          .insert({
+            user_id: userId,
+            favorite_user_id: targetUserId,
+            created_at: new Date().toISOString()
+          });
+
+        if (insertError) {
+          console.error('Error adding favorite:', insertError);
+          return false;
+        }
+
+        // Ensure compatibility analysis is stored
+        const compatibilityScore = await this.getCompatibilityAnalysis(userId, targetUserId);
+        if (compatibilityScore) {
+          await supabase
+            .from('smart_matches')
+            .upsert({
+              user_id: userId,
+              target_user_id: targetUserId,
+              compatibility_score: compatibilityScore.overall,
+              strengths: compatibilityScore.strengths,
+              challenges: compatibilityScore.challenges,
+              tips: compatibilityScore.tips,
+              long_term_prediction: compatibilityScore.long_term_prediction,
+              last_updated: new Date().toISOString()
+            });
+        }
+      } else {
+        // Remove from favorites
+        const { error: deleteError } = await supabase
+          .from('favorite_profiles')
+          .delete()
+          .eq('user_id', userId)
+          .eq('favorite_user_id', targetUserId);
+
+        if (deleteError) {
+          console.error('Error removing favorite:', deleteError);
+          return false;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      return false;
+    }
+  },
+
   async getNotifications(userId: string) {
     try {
       const { data, error } = await supabase
@@ -585,304 +772,15 @@ export const profileService = {
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching notifications:', error);
+        return [];
+      }
+
       return data || [];
     } catch (error) {
       console.error('Error getting notifications:', error);
-      throw error;
-    }
-  },
-
-  async markNotificationAsRead(notificationId: string) {
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', notificationId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-      throw error;
-    }
-  },
-
-  async updateNotificationPreferences(userId: string, preferences: any) {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .update({
-          notification_preferences: preferences
-        })
-        .eq('user_id', userId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error updating notification preferences:', error);
-      throw error;
-    }
-  },
-
-  async updateMatchingPreferences(userId: string, preferences: any) {
-    try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .update({
-          matching_preferences: preferences
-        })
-        .eq('user_id', userId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error updating matching preferences:', error);
-      throw error;
-    }
-  },
-
-  // Stream Chat methods
-  async getStreamChatToken(userId: string) {
-    try {
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('stream_chat_token')
-        .eq('user_id', userId)
-        .single();
-
-      if (profileError) throw profileError;
-
-      if (!profile?.stream_chat_token) {
-        // Generate new token if not exists
-        // Note: Implementation depends on your Stream Chat setup
-        throw new Error('Stream Chat token not found');
-      }
-
-      return profile.stream_chat_token;
-    } catch (error) {
-      console.error('Error getting Stream Chat token:', error);
-      throw error;
-    }
-  },
-
-  async uploadProfileImage(userId: string, file: File) {
-    try {
-      const fileExt = file.name.split('.').pop();
-      const filePath = `profile-pictures/${userId}/avatar.${fileExt}`;
-
-      // Upload the file to Supabase storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('user-content')
-        .upload(filePath, file, {
-          upsert: true,
-          contentType: file.type
-        });
-
-      if (uploadError) throw uploadError;
-
-      // Get the public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('user-content')
-        .getPublicUrl(filePath);
-
-      // Update the user profile with the new image URL
-      const { data: profile, error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ profile_image: publicUrl })
-        .eq('user_id', userId)
-        .select()
-        .single();
-
-      if (updateError) throw updateError;
-
-      return profile;
-    } catch (error) {
-      console.error('Error uploading profile image:', error);
-      throw error;
-    }
-  },
-
-  async deleteProfileImage(userId: string) {
-    try {
-      // Delete the file from storage
-      const { error: deleteError } = await supabase.storage
-        .from('user-content')
-        .remove([`profile-pictures/${userId}/avatar`]);
-
-      if (deleteError) throw deleteError;
-
-      // Update the user profile to remove the image URL
-      const { data: profile, error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ profile_image: null })
-        .eq('user_id', userId)
-        .select()
-        .single();
-
-      if (updateError) throw updateError;
-
-      return profile;
-    } catch (error) {
-      console.error('Error deleting profile image:', error);
-      throw error;
-    }
-  },
-
-  async getFavoriteProfiles(userId: string): Promise<FavoriteProfile[]> {
-    try {
-      // First get the favorite profile IDs
-      const { data: favorites, error: favoritesError } = await supabase
-        .from('favorite_profiles')
-        .select('*')
-        .eq('user_id', userId);
-
-      if (favoritesError) throw favoritesError;
-      if (!favorites || favorites.length === 0) return [];
-
-      // Get the user profiles for these favorites
-      const favoriteIds = favorites.map((f: FavoriteRecord) => f.favorite_user_id);
-      const { data: profiles, error: profilesError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .in('user_id', favoriteIds);
-
-      if (profilesError) throw profilesError;
-
-      // Get compatibility insights for these profiles
-      const { data: insights, error: insightsError } = await supabase
-        .from('compatibility_insights')
-        .select('*')
-        .eq('user_id', userId)
-        .in('target_user_id', favoriteIds);
-
-      if (insightsError) throw insightsError;
-
-      const insightsMap = new Map(insights?.map((i: CompatibilityRecord) => [i.target_user_id, i]));
-
-      // Combine all the data
-      return favorites.map((favorite: FavoriteRecord) => {
-        const profile = profiles?.find((p: UserProfile) => p.user_id === favorite.favorite_user_id);
-        const insight = insightsMap.get(favorite.favorite_user_id) || {} as CompatibilityRecord;
-        
-        return {
-          id: favorite.id,
-          user_id: userId,
-          favorite_user_id: favorite.favorite_user_id,
-          created_at: favorite.created_at,
-          profile: profile ? {
-            id: profile.id,
-            user_id: profile.user_id,
-            cupid_id: profile.cupid_id,
-            fullname: profile.fullname,
-            age: profile.age,
-            location: profile.location,
-            gender: profile.gender,
-            occupation: profile.occupation,
-            relationship_history: profile.relationship_history,
-            lifestyle: profile.lifestyle,
-            profile_image: profile.profile_image,
-            created_at: profile.created_at,
-            updated_at: profile.updated_at
-          } : undefined,
-          compatibility_insights: {
-            id: insight.id,
-            compatibility_score: insight.compatibility_score,
-            summary: insight.summary,
-            long_term_prediction: insight.long_term_prediction,
-            strengths: insight.strengths || [],
-            challenges: insight.challenges || [],
-            individual_challenges: insight.individual_challenges || { user_challenges: [], target_challenges: [] },
-            improvement_tips: insight.improvement_tips || [],
-            last_generated_at: insight.last_updated,
-            needs_update: false
-          }
-        };
-      });
-    } catch (error) {
-      console.error('Error getting favorite profiles:', error);
       return [];
-    }
-  },
-
-  async addToFavorites(userId: string, favoriteUserId: string) {
-    try {
-      const { data, error } = await supabase
-        .from('favorite_profiles')
-        .insert({
-          user_id: userId,
-          favorite_user_id: favoriteUserId,
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error adding to favorites:', error);
-      throw error;
-    }
-  },
-
-  async removeFromFavorites(userId: string, favoriteUserId: string) {
-    try {
-      const { error } = await supabase
-        .from('favorite_profiles')
-        .delete()
-        .eq('user_id', userId)
-        .eq('favorite_user_id', favoriteUserId);
-
-      if (error) throw error;
-      return true;
-    } catch (error) {
-      console.error('Error removing from favorites:', error);
-      throw error;
-    }
-  },
-
-  async generateCompatibilityInsights(userId: string, targetUserId: string) {
-    try {
-      // Get both user profiles
-      const [userProfile, targetProfile] = await Promise.all([
-        this.getUserProfile(userId),
-        this.getUserProfile(targetUserId)
-      ]);
-
-      if (!userProfile || !targetProfile) {
-        throw new Error('One or both profiles not found');
-      }
-
-      // Generate compatibility analysis
-      const compatibility = await this.calculateCompatibility(userId, targetUserId);
-
-      // Save to database
-      const { data, error } = await supabase
-        .from('smart_matches')
-        .upsert({
-          user_id: userId,
-          target_user_id: targetUserId,
-          compatibility_score: compatibility.compatibility_score,
-          strengths: compatibility.strengths,
-          challenges: compatibility.challenges,
-          tips: compatibility.tips,
-          long_term_prediction: compatibility.long_term_prediction,
-          last_updated: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error generating compatibility insights:', error);
-      throw error;
     }
   },
 
@@ -900,190 +798,287 @@ export const profileService = {
           created_at: new Date().toISOString()
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating notification:', error);
+      }
     } catch (error) {
       console.error('Error creating notification:', error);
-      throw error;
     }
   },
 
-  async createMatchRequest(userId: string, targetUserId: string, requestType: 'PERSONA_VIEW' | 'CHAT') {
+  async markNotificationAsRead(notificationId: string) {
     try {
-      // Check if request already exists
-      const { data: existing } = await supabase
-        .from('match_requests')
-        .select('*')
-        .eq('requester_id', userId)
-        .eq('target_id', targetUserId)
-        .eq('request_type', requestType)
-        .eq('status', 'PENDING')
-        .maybeSingle();
-
-      if (existing) return existing;
-
       const { data, error } = await supabase
-        .from('match_requests')
-        .insert({
-          requester_id: userId,
-          target_id: targetUserId,
-          request_type: requestType,
-          status: 'PENDING'
-        })
+        .from('notifications')
+        .update({ read: true })
+        .eq('id', notificationId)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error marking notification as read:', error);
+        return null;
+      }
+
       return data;
     } catch (error) {
-      console.error('Error creating match request:', error);
-      throw error;
+      console.error('Error marking notification as read:', error);
+      return null;
     }
   },
 
-  async updateMatchRequest(requestId: string, status: 'APPROVED' | 'REJECTED') {
+  async updateNotificationPreferences(userId: string, preferences: Record<string, boolean>) {
     try {
       const { data, error } = await supabase
-        .from('match_requests')
-        .update({ 
-          status,
+        .from('user_profiles')
+        .update({
+          notification_preferences: preferences
+        })
+        .eq('user_id', userId)
+        .select()
+        .single();
+
+      if (error) {
+      console.error('Error updating notification preferences:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error updating notification preferences:', error);
+      return null;
+    }
+  },
+
+  async getFavoriteProfiles(userId: string): Promise<SmartMatch[]> {
+    try {
+      // Get favorite profile IDs
+      const { data: favorites, error: favoritesError } = await supabase
+        .from('favorite_profiles')
+        .select('favorite_user_id')
+        .eq('user_id', userId);
+
+      if (favoritesError) {
+        console.error('Error fetching favorites:', favoritesError);
+        return [];
+      }
+
+      if (!favorites || favorites.length === 0) {
+        return [];
+      }
+
+      // Get profiles for favorites
+      const favoriteIds = favorites.map(f => f.favorite_user_id);
+      const { data: profiles, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select(`
+          id,
+          user_id,
+          cupid_id,
+          fullname,
+          age,
+          location,
+          occupation,
+          profile_image
+        `)
+        .in('user_id', favoriteIds);
+
+      if (profilesError) {
+        console.error('Error fetching favorite profiles:', profilesError);
+        return [];
+      }
+
+      // Get stored compatibility scores
+      const { data: storedMatches, error: matchesError } = await supabase
+        .from('smart_matches')
+        .select('*')
+        .eq('user_id', userId)
+        .in('target_user_id', favoriteIds);
+
+      if (matchesError) {
+        console.error('Error fetching stored matches:', matchesError);
+      }
+
+      // Create a map of stored matches for quick lookup
+      const matchesMap = new Map(storedMatches?.map(m => [m.target_user_id, m]) || []);
+
+      // Transform profiles into SmartMatch format
+      const matchPromises = profiles.map(async (profile) => {
+        try {
+          // Check for stored compatibility data first
+          const storedMatch = matchesMap.get(profile.user_id);
+          let compatibilityScore;
+
+          if (storedMatch) {
+            compatibilityScore = {
+              overall: storedMatch.compatibility_score,
+              strengths: storedMatch.strengths,
+              challenges: storedMatch.challenges,
+              tips: storedMatch.tips,
+              long_term_prediction: storedMatch.long_term_prediction
+            };
+          } else {
+            // Generate and store new compatibility data
+            compatibilityScore = await this.getCompatibilityAnalysis(userId, profile.user_id);
+            if (compatibilityScore) {
+              await supabase
+                .from('smart_matches')
+                .upsert({
+                  user_id: userId,
+                  target_user_id: profile.user_id,
+                  compatibility_score: compatibilityScore.overall,
+                  strengths: compatibilityScore.strengths,
+                  challenges: compatibilityScore.challenges,
+                  tips: compatibilityScore.tips,
+                  long_term_prediction: compatibilityScore.long_term_prediction,
+                  last_updated: new Date().toISOString()
+                });
+            }
+          }
+
+          if (!compatibilityScore) return null;
+
+          const match: SmartMatch = {
+            profile: {
+              id: profile.id,
+              user_id: profile.user_id,
+              cupid_id: profile.cupid_id,
+              fullname: profile.fullname,
+              age: profile.age,
+              location: profile.location,
+              occupation: profile.occupation,
+              profile_image: profile.profile_image
+            },
+            compatibility_score: compatibilityScore.overall,
+            compatibility_details: {
+              strengths: compatibilityScore.strengths,
+              challenges: compatibilityScore.challenges,
+              tips: compatibilityScore.tips,
+              long_term_prediction: compatibilityScore.long_term_prediction
+            },
+            is_favorite: true,
+            last_updated: storedMatch?.last_updated || new Date().toISOString()
+          };
+          return match;
+        } catch (error) {
+          console.error(`Error getting compatibility for profile ${profile.id}:`, error);
+          return null;
+        }
+      });
+
+      const matches = await Promise.all(matchPromises);
+
+      // Filter out null results and sort by compatibility score
+      return matches
+        .filter((match): match is SmartMatch => match !== null)
+        .sort((a, b) => b.compatibility_score - a.compatibility_score);
+    } catch (error) {
+      console.error('Error getting favorite profiles:', error);
+      return [];
+    }
+  },
+
+  async getPositivePersona(userId: string): Promise<PositivePersona | null> {
+    try {
+      console.log('Fetching positive persona for user:', userId);
+      const { data: aspects, error } = await supabase
+        .from('persona_aspects')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_positive', true);
+
+      if (error) {
+        console.error('Error fetching positive persona:', error);
+        return null;
+      }
+
+      if (!aspects || aspects.length === 0) {
+        console.log('No positive persona found');
+        return null;
+      }
+
+      return {
+        personality_traits: this.transformStoredAspect(aspects.find(a => a.aspect_type === 'personality_traits')),
+        core_values: this.transformStoredAspect(aspects.find(a => a.aspect_type === 'core_values')),
+        behavioral_traits: this.transformStoredAspect(aspects.find(a => a.aspect_type === 'behavioral_traits')),
+        hobbies_interests: this.transformStoredAspect(aspects.find(a => a.aspect_type === 'hobbies_interests'))
+      };
+    } catch (error) {
+      console.error('Error getting positive persona:', error);
+      return null;
+    }
+  },
+
+  async getNegativePersona(userId: string): Promise<NegativePersona | null> {
+    try {
+      console.log('Fetching negative persona for user:', userId);
+      const { data: aspects, error } = await supabase
+        .from('persona_aspects')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('is_positive', false);
+
+      if (error) {
+        console.error('Error fetching negative persona:', error);
+        return null;
+      }
+
+      if (!aspects || aspects.length === 0) {
+        console.log('No negative persona found');
+        return null;
+      }
+
+      return {
+        emotional_aspects: this.transformStoredAspect(aspects.find(a => a.aspect_type === 'emotional_aspects')),
+        social_aspects: this.transformStoredAspect(aspects.find(a => a.aspect_type === 'social_aspects')),
+        lifestyle_aspects: this.transformStoredAspect(aspects.find(a => a.aspect_type === 'lifestyle_aspects')),
+        relational_aspects: this.transformStoredAspect(aspects.find(a => a.aspect_type === 'relational_aspects'))
+      };
+    } catch (error) {
+      console.error('Error getting negative persona:', error);
+      return null;
+    }
+  },
+
+  async savePersonalityAnalysis(userId: string, data: any): Promise<boolean> {
+    try {
+      console.log('Saving personality analysis for user:', userId);
+      
+      // First get existing personality data
+      const { data: existingData } = await supabase
+        .from('user_profiles')
+        .select('personality_data')
+        .eq('user_id', userId)
+        .single();
+
+      // Update the profile with personality data
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .update({
+          personality_data: data,
           updated_at: new Date().toISOString()
         })
-        .eq('id', requestId)
-        .select()
-        .single();
+        .eq('user_id', userId);
 
-      if (error) throw error;
-      return data;
+      if (profileError) {
+        console.error('Error saving personality data to profile:', profileError);
+        return false;
+      }
+
+      // Check if personality data changed significantly
+      const personalityChanged = JSON.stringify(existingData?.personality_data) !== JSON.stringify(data);
+
+      if (personalityChanged) {
+        // Trigger persona generation in the background
+        this.generateAndStorePersonaAnalysis(userId, true, 'PERSONALITY_TEST')
+          .catch(error => console.error('Error generating persona after personality test:', error));
+      }
+
+      return true;
     } catch (error) {
-      console.error('Error updating match request:', error);
-      throw error;
+      console.error('Error saving personality analysis:', error);
+      return false;
     }
-  },
-
-  async getMatchRequests(userId: string, type: 'received' | 'sent') {
-    try {
-      const { data, error } = await supabase
-        .from('match_requests')
-        .select(`
-          *,
-          requester:requester_id(
-            id,
-            user_profiles!inner(*)
-          ),
-          target:target_id(
-            id,
-            user_profiles!inner(*)
-          )
-        `)
-        .eq(type === 'received' ? 'target_id' : 'requester_id', userId)
-        .eq('status', 'PENDING');
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error('Error getting match requests:', error);
-      throw error;
-    }
-  },
-
-  async getRelationshipInsights(userId: string) {
-    try {
-      const { data, error } = await supabase
-        .from('relationship_insights')
-        .select(`
-          *,
-          partner:partner_id(
-            id,
-            user_profiles!inner(*)
-          )
-        `)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      console.error('Error getting relationship insights:', error);
-      throw error;
-    }
-  },
-
-  async updateRelationshipStatus(userId: string, partnerId: string, status: 'VIEWING' | 'CHATTING' | 'DATING' | 'ENDED') {
-    try {
-      const { data: existing } = await supabase
-        .from('relationship_insights')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('partner_id', partnerId)
-        .maybeSingle();
-
-      const { data, error } = await supabase
-        .from('relationship_insights')
-        .upsert({
-          id: existing?.id,
-          user_id: userId,
-          partner_id: partnerId,
-          status,
-          updated_at: new Date().toISOString(),
-          created_at: existing?.created_at || new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error updating relationship status:', error);
-      throw error;
-    }
-  },
-
-  analyzeCompatibilityByCupidId,
-
-  async addDealbreaker(userId: string, dealBreaker: string) {
-    try {
-      const { data, error } = await supabase
-        .from('dealbreakers')
-        .insert([
-          {
-            user_id: userId,
-            dealbreaker: dealBreaker
-          }
-        ]);
-
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error adding dealbreaker:', error);
-      throw error;
-    }
-  },
-
-  getVisibleProfileData(profile: UserProfile): UserProfile {
-    if (!profile) return profile;
-
-    const visibilitySettings = profile.visibility_settings || {
-      persona_visible: true,
-      profile_visible: true,
-      contact_visible: true
-    };
-
-    const visibleProfile = { ...profile };
-
-    if (!visibilitySettings.profile_visible) {
-      visibleProfile.age = 0;
-      visibleProfile.location = 'Hidden';
-      visibleProfile.occupation = 'Hidden';
-      visibleProfile.relationship_history = 'Hidden';
-      visibleProfile.lifestyle = 'Hidden';
-      visibleProfile.interests = [];
-    }
-
-    if (!visibilitySettings.contact_visible) {
-      visibleProfile.profile_image = null;
-    }
-
-    return visibleProfile;
   }
 };
 

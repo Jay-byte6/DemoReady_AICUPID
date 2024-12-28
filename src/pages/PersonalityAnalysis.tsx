@@ -254,6 +254,22 @@ const PersonalityAnalysis = () => {
     }
   };
 
+  const handleStepClick = async (stepNumber: number) => {
+    // Don't allow clicking future steps
+    if (stepNumber > currentStep) return;
+
+    // Save current section before switching
+    if (currentSection) {
+      if (!validateCurrentSection()) return;
+      const saved = await saveCurrentSection();
+      if (!saved) return;
+    }
+
+    setCurrentStep(stepNumber);
+    setError(null);
+    window.scrollTo(0, 0);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -275,7 +291,11 @@ const PersonalityAnalysis = () => {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           {steps.map((step) => (
-            <div key={step.id} className="flex items-center">
+            <div 
+              key={step.id} 
+              className={`flex items-center ${step.id <= currentStep ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+              onClick={() => handleStepClick(step.id)}
+            >
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center ${
                   step.id < currentStep
@@ -303,7 +323,11 @@ const PersonalityAnalysis = () => {
         </div>
         <div className="flex justify-between text-sm text-gray-600">
           {steps.map((step) => (
-            <div key={step.id} className="w-24 text-center">
+            <div 
+              key={step.id} 
+              className={`w-24 text-center ${step.id <= currentStep ? 'cursor-pointer hover:text-indigo-600' : 'cursor-not-allowed'}`}
+              onClick={() => handleStepClick(step.id)}
+            >
               {step.name}
             </div>
           ))}

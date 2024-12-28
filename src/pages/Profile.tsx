@@ -4,8 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 import profileService from '../services/supabaseService';
 import PersonaInsights from '../components/profile/PersonaInsights';
 import ProfileImageUpload from '../components/profile/ProfileImageUpload';
-import type { AIPersona, NegativePersona, UserProfile, CompatibilityDetails } from '../types';
+import type { AIPersona, NegativePersona, UserProfile, CompatibilityDetails, PersonaAnalysis, PersonaAspect } from '../types';
 import { useParams } from 'react-router-dom';
+import GeneratePersonaButton from '../components/profile/GeneratePersonaButton';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -17,6 +18,9 @@ const Profile = () => {
   const [negativePersona, setNegativePersona] = useState<NegativePersona | null>(null);
   const [compatibilityDetails, setCompatibilityDetails] = useState<CompatibilityDetails | null>(null);
   const [compatibilityScore, setCompatibilityScore] = useState<number | null>(null);
+  const [personaAnalysis, setPersonaAnalysis] = useState<PersonaAnalysis | null>(null);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const isOwnProfile = !userId || userId === user?.id;
 
   useEffect(() => {
@@ -24,6 +28,12 @@ const Profile = () => {
       loadUserProfile();
     }
   }, [user, userId]);
+
+  useEffect(() => {
+    if (userProfile?.id) {
+      loadPersonaAnalysis();
+    }
+  }, [userProfile]);
 
   const loadUserProfile = async () => {
     if (!user?.id) return;
@@ -56,6 +66,70 @@ const Profile = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadPersonaAnalysis = async () => {
+    if (!userProfile?.id) return;
+
+    setIsLoadingAnalysis(true);
+    setAnalysisError(null);
+
+    try {
+      console.log('Starting persona analysis for user:', userProfile.id);
+      console.log('OpenAI Key available:', !!import.meta.env.VITE_OPENAI_API_KEY);
+      
+      const analysis = await profileService.getPersonaAnalysis(userProfile.id);
+      console.log('Persona analysis result:', analysis);
+      
+      if (analysis) {
+        setPersonaAnalysis(analysis);
+      } else {
+        setAnalysisError('Unable to generate persona analysis. Please try again later.');
+      }
+    } catch (error: any) {
+      console.error('Error in persona analysis:', error);
+      setAnalysisError(error?.message || 'Error generating persona analysis');
+    } finally {
+      setIsLoadingAnalysis(false);
+    }
+  };
+
+  const renderPersonaSection = (title: string, aspect: PersonaAspect | undefined) => {
+    if (!aspect) return null;
+
+    return (
+      <div className="mb-6">
+        <h4 className="text-lg font-semibold text-gray-800 mb-3">{title}</h4>
+        {aspect.traits.length > 0 ? (
+          <div className="space-y-3">
+            {aspect.traits.map((trait, index) => (
+              <div key={index} className="bg-white rounded-lg p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium text-gray-700">{trait}</span>
+                  {aspect.intensity && (
+                    <span className="text-sm text-indigo-600 font-medium">
+                      {aspect.intensity}%
+                    </span>
+                  )}
+                </div>
+                {aspect.examples[index] && (
+                  <p className="text-sm text-gray-600">
+                    Example: {aspect.examples[index]}
+                  </p>
+                )}
+              </div>
+            ))}
+            {aspect.summary && (
+              <p className="text-sm text-gray-600 mt-2 italic">
+                {aspect.summary}
+              </p>
+            )}
+          </div>
+        ) : (
+          <p className="text-gray-500 italic">No traits available</p>
+        )}
+      </div>
+    );
   };
 
   // Helper function to validate persona data structure
@@ -214,8 +288,60 @@ const Profile = () => {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <GeneratePersonaButton />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+        {/* Positive Traits & Characteristics */}
+        <div className="bg-white rounded-xl p-6 shadow-lg">
+          <h3 className="text-xl font-bold text-green-600 mb-6">
+            Positive Traits & Characteristics
+          </h3>
+          {isLoadingAnalysis ? (
+            <div className="flex justify-center items-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+            </div>
+          ) : analysisError ? (
+            <div className="text-red-500 text-center">{analysisError}</div>
+          ) : personaAnalysis?.positivePersona ? (
+            <>
+              {renderPersonaSection('Personality Traits', personaAnalysis.positivePersona.personality_traits)}
+              {renderPersonaSection('Core Values', personaAnalysis.positivePersona.core_values)}
+              {renderPersonaSection('Behavioral Traits', personaAnalysis.positivePersona.behavioral_traits)}
+              {renderPersonaSection('Hobbies & Interests', personaAnalysis.positivePersona.hobbies_interests)}
+            </>
+          ) : (
+            <div className="text-gray-500 text-center">No analysis available</div>
+          )}
+        </div>
+
+        {/* Growth Areas & Challenges */}
+        <div className="bg-white rounded-xl p-6 shadow-lg">
+          <h3 className="text-xl font-bold text-red-600 mb-6">
+            Growth Areas & Challenges
+          </h3>
+          {isLoadingAnalysis ? (
+            <div className="flex justify-center items-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+            </div>
+          ) : analysisError ? (
+            <div className="text-red-500 text-center">{analysisError}</div>
+          ) : personaAnalysis?.negativePersona ? (
+            <>
+              {renderPersonaSection('Emotional Aspects', personaAnalysis.negativePersona.emotional_aspects)}
+              {renderPersonaSection('Social Aspects', personaAnalysis.negativePersona.social_aspects)}
+              {renderPersonaSection('Lifestyle Aspects', personaAnalysis.negativePersona.lifestyle_aspects)}
+              {renderPersonaSection('Relational Aspects', personaAnalysis.negativePersona.relational_aspects)}
+            </>
+          ) : (
+            <div className="text-gray-500 text-center">No analysis available</div>
+          )}
+        </div>
+      </div>
+
       {/* Only show persona insights if viewing own profile or if persona is visible */}
-      {(isOwnProfile || (userProfile?.visibility_settings?.persona_visible ?? true)) && positivePersona && (
+      {(isOwnProfile || (userProfile?.visibility_settings?.smart_matching_visible ?? true)) && positivePersona && (
         <PersonaInsights
           positivePersona={positivePersona}
           negativePersona={negativePersona!}

@@ -1,390 +1,397 @@
 import OpenAI from 'openai';
-import { AIPersona, NegativePersona } from '../types';
+import { UserProfile, PersonaAnalysis, PersonaAspect, CompatibilityScore } from '../types';
 
-const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+// Get API key from environment variable with Vite prefix
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+const DEBUG = true; // Enable debug mode
 
-if (!apiKey) {
-  console.warn('OpenAI API key is not set in environment variables. Some features may not work properly.');
-}
-
-// Create OpenAI instance with error handling
-let openaiInstance: OpenAI | null = null;
-try {
-  openaiInstance = new OpenAI({
-    apiKey: apiKey || '',
-    dangerouslyAllowBrowser: true
+// Debug logging
+if (DEBUG) {
+  console.log('OpenAI Configuration:', {
+    apiKeyAvailable: !!OPENAI_API_KEY,
+    apiKeyLength: OPENAI_API_KEY?.length || 0
   });
-} catch (error) {
-  console.error('Error initializing OpenAI:', error);
 }
 
-export const openai = openaiInstance;
+if (!OPENAI_API_KEY) {
+  console.warn('OpenAI API key is not set. Persona analysis features will not work.');
+}
 
-// Utility function to check if OpenAI is available
-const isOpenAIAvailable = () => {
-  if (!openaiInstance) {
-    console.warn('OpenAI is not initialized. Some features may not work properly.');
+const openai = new OpenAI({
+  apiKey: OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true
+});
+
+const COMPATIBILITY_WEIGHTS = {
+  values_alignment: 0.30,
+  personality_compatibility: 0.25,
+  emotional_intelligence: 0.20,
+  lifestyle_match: 0.15,
+  goals_alignment: 0.10
+};
+
+// Keep existing function for backward compatibility
+export const generatePersonaAnalysis = async (data: { user1: any, user2: any }) => {
+  try {
+    const prompt = `Analyze the compatibility between these two individuals:
+    Person 1: ${JSON.stringify(data.user1)}
+    Person 2: ${JSON.stringify(data.user2)}
+    
+    Provide:
+    1. Overall compatibility score (0-100)
+    2. Key strengths
+    3. Potential challenges
+    4. Tips for better understanding
+    5. Long-term relationship prediction`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4-turbo-preview",
+      messages: [
+        { role: "system", content: "You are an expert relationship counselor." },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 1000
+    });
+
+    const analysis = JSON.parse(completion.choices[0].message.content || '{}');
+    return transformAIResponseToCompatibilityScore(analysis);
+  } catch (error) {
+    console.error('Error generating compatibility analysis:', error);
+    throw error;
+  }
+};
+
+interface ChatHistory {
+  messages: string[];
+  aiChat: string[];
+  personalityData?: any;
+}
+
+export async function generateDetailedPersonaAnalysis(
+  profile: UserProfile,
+  chatHistory: ChatHistory
+): Promise<PersonaAnalysis | null> {
+  try {
+    if (DEBUG) {
+      console.log('Generating persona analysis for profile:', {
+        id: profile.id,
+        hasApiKey: !!OPENAI_API_KEY,
+        hasChatHistory: !!chatHistory,
+        profileData: profile
+      });
+    }
+
+    // Enhanced profile validation
+    if (!profile || !profile.id || !profile.fullname) {
+      console.warn('Insufficient profile data for analysis:', profile);
+      return createDefaultErrorResponse('Insufficient profile data');
+    }
+
+    // Ensure OpenAI API key is available
+    if (!OPENAI_API_KEY) {
+      console.error('OpenAI API key is not configured');
+      return createDefaultErrorResponse('API configuration error');
+    }
+
+    const sanitizedProfile = {
+      id: profile.id,
+      fullname: profile.fullname,
+      occupation: profile.occupation || '',
+      location: profile.location || '',
+      age: profile.age || null,
+      relationship_history: profile.relationship_history || '',
+      lifestyle: profile.lifestyle || '',
+      interests: profile.interests || []
+    };
+
+    const prompt = `As an expert psychologist and relationship counselor, analyze this person's profile and provide a detailed personality assessment in JSON format. Consider all available information:
+
+Profile Information:
+${JSON.stringify(sanitizedProfile, null, 2)}
+
+${chatHistory ? `Chat History & Interactions:
+${JSON.stringify(chatHistory, null, 2)}` : ''}
+
+Analyze and provide insights in the following structured format:
+
+{
+  "positivePersona": {
+    "personality_traits": {
+      "traits": ["List 5-7 key personality traits"],
+      "examples": ["Provide specific examples from profile/chat for each trait"],
+      "summary": "Comprehensive personality summary",
+      "intensity": 75
+    },
+    "core_values": {
+      "traits": ["List 4-6 fundamental values"],
+      "examples": ["Real examples demonstrating each value"],
+      "summary": "Analysis of value system",
+      "intensity": 80
+    },
+    "behavioral_traits": {
+      "traits": ["List 5-7 behavioral patterns"],
+      "examples": ["Specific situations showing each behavior"],
+      "summary": "Overall behavioral analysis",
+      "intensity": 70
+    },
+    "hobbies_interests": {
+      "traits": ["List all identified interests"],
+      "examples": ["How they pursue each interest"],
+      "summary": "Analysis of personal interests",
+      "intensity": 85
+    }
+  },
+  "negativePersona": {
+    "emotional_aspects": {
+      "traits": ["List 3-5 emotional growth areas"],
+      "examples": ["Specific situations showing each aspect"],
+      "summary": "Analysis of emotional challenges",
+      "intensity": 60
+    },
+    "social_aspects": {
+      "traits": ["List 3-5 social growth areas"],
+      "examples": ["Examples of social interaction patterns"],
+      "summary": "Analysis of social challenges",
+      "intensity": 55
+    },
+    "lifestyle_aspects": {
+      "traits": ["List 3-5 lifestyle challenges"],
+      "examples": ["Real examples of each challenge"],
+      "summary": "Analysis of lifestyle improvements",
+      "intensity": 50
+    },
+    "relational_aspects": {
+      "traits": ["List 3-5 relationship growth areas"],
+      "examples": ["Specific relationship patterns"],
+      "summary": "Analysis of relationship challenges",
+      "intensity": 65
+    }
+  }
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4-turbo-preview",
+      messages: [
+        { 
+          role: "system", 
+          content: "You are an expert psychologist and relationship counselor with deep expertise in personality analysis. Provide detailed, evidence-based analysis in valid JSON format. Always include both positive and negative aspects of personality."
+        },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 2500,
+      response_format: { type: "json_object" }
+    });
+
+    if (!completion.choices[0]?.message?.content) {
+      console.warn('No content in OpenAI response');
+      return createDefaultErrorResponse('Analysis generation failed');
+    }
+
+    const analysis = JSON.parse(completion.choices[0].message.content);
+    
+    // Validate the analysis structure
+    if (!isValidAnalysis(analysis)) {
+      console.warn('Invalid analysis structure received:', analysis);
+      return createDefaultErrorResponse('Invalid analysis format');
+    }
+
+    return transformAIResponseToPersonaAnalysis(analysis);
+  } catch (error) {
+    console.error('Error in generateDetailedPersonaAnalysis:', error);
+    if (DEBUG) {
+      const err = error as Error;
+      console.log('Error details:', {
+        message: err.message,
+        name: err.name,
+        stack: err.stack
+      });
+    }
+    return createDefaultErrorResponse('Error generating analysis');
+  }
+}
+
+// Helper function to create default error response
+function createDefaultErrorResponse(errorMessage: string): PersonaAnalysis {
+  const defaultAspect = {
+    traits: [],
+    examples: [],
+    summary: errorMessage,
+    intensity: 0
+  };
+
+  return {
+    positivePersona: {
+      personality_traits: defaultAspect,
+      core_values: defaultAspect,
+      behavioral_traits: defaultAspect,
+      hobbies_interests: defaultAspect
+    },
+    negativePersona: {
+      emotional_aspects: defaultAspect,
+      social_aspects: defaultAspect,
+      lifestyle_aspects: defaultAspect,
+      relational_aspects: defaultAspect
+    }
+  };
+}
+
+// Helper function to validate analysis structure
+function isValidAnalysis(analysis: any): boolean {
+  const hasPositivePersona = analysis?.positivePersona && 
+    analysis.positivePersona.personality_traits?.traits?.length > 0 &&
+    analysis.positivePersona.core_values?.traits?.length > 0 &&
+    analysis.positivePersona.behavioral_traits?.traits?.length > 0 &&
+    analysis.positivePersona.hobbies_interests?.traits?.length > 0;
+
+  const hasNegativePersona = analysis?.negativePersona &&
+    analysis.negativePersona.emotional_aspects?.traits?.length > 0 &&
+    analysis.negativePersona.social_aspects?.traits?.length > 0 &&
+    analysis.negativePersona.lifestyle_aspects?.traits?.length > 0 &&
+    analysis.negativePersona.relational_aspects?.traits?.length > 0;
+
+  if (!hasPositivePersona || !hasNegativePersona) {
+    console.warn('Invalid analysis structure:', {
+      hasPositivePersona,
+      hasNegativePersona,
+      analysis: JSON.stringify(analysis, null, 2)
+    });
     return false;
   }
+
   return true;
-};
+}
 
-const generateDummyPersonaData = () => {
-  const positivePersona: AIPersona = {
-    user_id: '',
-    personality_traits: {
-      examples: [
-        'Naturally empathetic and understanding',
-        'Strong sense of responsibility',
-        'Adaptable to new situations',
-        'Creative problem solver'
-      ]
-    },
-    core_values: {
-      examples: [
-        'Honesty and integrity',
-        'Personal growth',
-        'Family and relationships',
-        'Work-life balance'
-      ]
-    },
-    behavioral_traits: {
-      examples: [
-        'Good listener',
-        'Patient with others',
-        'Organized and methodical',
-        'Team player'
-      ]
-    },
-    hobbies_interests: {
-      examples: [
-        'Reading and self-improvement',
-        'Outdoor activities',
-        'Creative arts',
-        'Social gatherings'
-      ]
-    },
-    summary: 'A well-rounded individual with strong interpersonal skills and a commitment to personal growth.'
-  };
-
-  const negativePersona: NegativePersona = {
-    user_id: '',
-    emotional_weaknesses: {
-      traits: [
-        'Can be overly sensitive to criticism',
-        'Sometimes struggles with anxiety',
-        'Tendency to overthink decisions',
-        'Occasional mood swings'
-      ]
-    },
-    social_weaknesses: {
-      traits: [
-        'Can be reserved in large groups',
-        'Sometimes avoids confrontation',
-        'Takes time to open up to new people',
-        'Occasional difficulty with small talk'
-      ]
-    },
-    lifestyle_weaknesses: {
-      traits: [
-        'Procrastination tendencies',
-        'Irregular sleep schedule',
-        'Sometimes neglects exercise',
-        'Can be too focused on work'
-      ]
-    },
-    relational_weaknesses: {
-      traits: [
-        'Can be too accommodating',
-        'Difficulty expressing needs',
-        'Sometimes avoids difficult conversations',
-        'Can be overly cautious in relationships'
-      ]
-    },
-    summary: 'Areas for growth include managing emotional sensitivity, improving work-life balance, and developing more assertive communication skills.'
-  };
-
-  return { positivePersona, negativePersona };
-};
-
-export const generatePersonaAnalysis = async (personalityData: any) => {
+// New enhanced compatibility analysis
+export const analyzeDetailedCompatibility = async (
+  profile1: UserProfile,
+  profile2: UserProfile,
+  personas?: { persona1: PersonaAnalysis, persona2: PersonaAnalysis }
+): Promise<CompatibilityScore> => {
   try {
-    if (!isOpenAIAvailable()) {
-      const { positivePersona, negativePersona } = generateDummyPersonaData();
-      return {
-        positive_persona: positivePersona,
-        negative_persona: negativePersona
-      };
-    }
+    const prompt = `As an expert relationship counselor, analyze the compatibility between these two individuals considering these weights:
+- Values Alignment (30%): Core values, beliefs, and principles
+- Personality Compatibility (25%): Character traits and behavioral patterns
+- Emotional Intelligence (20%): Emotional understanding and support
+- Lifestyle Match (15%): Daily routines and habits
+- Goals Alignment (10%): Future aspirations and plans
 
-    console.log('Generating persona analysis for:', personalityData);
-    
-    const prompt = `
-      Based on the following user data, generate a detailed personality analysis with both positive and negative traits:
-      ${JSON.stringify(personalityData, null, 2)}
+Person 1:
+${JSON.stringify(profile1, null, 2)}
 
-      Please provide:
-      1. Positive Personality Analysis including:
-         - Personality traits with examples
-         - Core values
-         - Behavioral traits with examples
-         - Hobbies and interests
-      
-      2. Negative Personality Analysis including:
-         - Emotional weaknesses with examples
-         - Social weaknesses with examples
-         - Intellectual weaknesses with examples
-         - Lifestyle weaknesses with examples
-         - Relational weaknesses with examples
-      
-      3. A concise summary of overall traits
+Person 2:
+${JSON.stringify(profile2, null, 2)}
 
-      Format the response as a JSON object with the following structure:
-      {
-        "positive_persona": {
-          "personality_traits": {},
-          "core_values": {},
-          "behavioral_traits": {},
-          "hobbies_interests": {},
-          "summary": ""
-        },
-        "negative_persona": {
-          "emotional_weaknesses": {},
-          "social_weaknesses": {},
-          "intellectual_weaknesses": {},
-          "lifestyle_weaknesses": {},
-          "relational_weaknesses": {},
-          "summary": ""
-        }
-      }
-    `;
+${personas ? `Detailed Personas:
+${JSON.stringify(personas, null, 2)}` : ''}
 
-    const response = await openai!.chat.completions.create({
-      model: 'gpt-4',
+Provide analysis in the following format:
+{
+  "overall_score": 85,
+  "emotional_score": 80,
+  "intellectual_score": 90,
+  "lifestyle_score": 75,
+  "summary": "Overall compatibility summary",
+  "strengths": ["strength1", "strength2"],
+  "challenges": ["challenge1", "challenge2"],
+  "tips": ["tip1", "tip2"],
+  "long_term_prediction": "Detailed prediction of relationship potential"
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4-turbo-preview",
       messages: [
-        {
-          role: 'system',
-          content: 'You are an expert personality analyst and relationship counselor.'
+        { 
+          role: "system", 
+          content: "You are an expert relationship counselor specializing in compatibility analysis. Provide analysis in valid JSON format only. Do not include any additional text or explanations outside the JSON object."
         },
-        {
-          role: 'user',
-          content: prompt
-        }
+        { role: "user", content: prompt }
       ],
       temperature: 0.7,
-      max_tokens: 2000
+      max_tokens: 2000,
+      response_format: { type: "json_object" }
     });
 
-    console.log('Generated persona analysis:', response.choices[0].message.content);
-    return JSON.parse(response.choices[0].message.content || '{}');
-  } catch (error) {
-    console.error('Error generating persona analysis:', error);
-    return {
-      positive_persona: {
-        personality_traits: {},
-        core_values: {},
-        behavioral_traits: {},
-        hobbies_interests: {},
-        summary: "Error generating analysis"
-      },
-      negative_persona: {
-        emotional_weaknesses: {},
-        social_weaknesses: {},
-        intellectual_weaknesses: {},
-        lifestyle_weaknesses: {},
-        relational_weaknesses: {},
-        summary: "Error generating analysis"
-      }
-    };
-  }
-};
+    if (!completion.choices[0]?.message?.content) {
+      throw new Error('No content in OpenAI response');
+    }
 
-interface UserData {
-  profile: any;
-  analysis: any;
-}
-
-interface CompatibilityInput {
-  user1: UserData;
-  user2: UserData;
-}
-
-export const analyzeCompatibility = async (input: CompatibilityInput) => {
-  try {
-    const { user1, user2 } = input;
-
-    // Generate more realistic dummy data for testing
-    return {
-      compatibility_score: 0.87,
-      strengths: [
-        'Both share a deep appreciation for intellectual conversations',
-        'Complementary communication styles - one is a good listener, the other expressive',
-        'Similar values regarding family and long-term commitment',
-        'Shared interest in personal growth and self-improvement',
-        'Compatible life goals and career aspirations'
-      ],
-      challenges: [
-        'Different approaches to handling stress and conflict',
-        'Varying social energy levels - one more extroverted than the other',
-        'Different financial management styles',
-        'Contrasting preferences for leisure activities'
-      ],
-      improvement_tips: [
-        'Schedule regular date nights to maintain connection',
-        'Practice active listening during disagreements',
-        'Find compromise in social activities that suit both energy levels',
-        'Create a shared financial plan that respects both styles',
-        'Develop shared hobbies while respecting individual interests'
-      ],
-      long_term_prediction: 'This match shows exceptional potential for a fulfilling long-term relationship. The complementary personality traits and shared core values provide a strong foundation. While there are areas that need attention, the willingness to grow together suggests a promising future. With open communication and mutual understanding, this could develop into a deeply satisfying partnership.'
-    };
+    const analysis = JSON.parse(completion.choices[0].message.content);
+    return transformAIResponseToCompatibilityScore(analysis);
   } catch (error) {
     console.error('Error analyzing compatibility:', error);
-    throw error;
-  }
-};
-
-export const generateImprovementTips = async (compatibilityData: any) => {
-  try {
-    if (!openaiInstance) {
-      throw new Error('OpenAI is not initialized');
-    }
-
-    const prompt = `
-      Based on this compatibility analysis:
-      ${JSON.stringify(compatibilityData, null, 2)}
-
-      Generate detailed, actionable tips for improving the relationship in these areas:
-      1. Communication
-      2. Understanding each other's needs
-      3. Managing differences
-      4. Building trust
-      5. Long-term growth
-
-      Format the response as a JSON object with tips categorized by area.
-    `;
-
-    const response = await openaiInstance.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert relationship counselor specializing in relationship improvement strategies.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 1000
-    });
-
-    return JSON.parse(response.choices[0].message.content || '{}');
-  } catch (error) {
-    console.error('Error generating improvement tips:', error);
-    throw error;
-  }
-};
-
-export const generateAIPersona = async (personalityData: any) => {
-  try {
-    if (!isOpenAIAvailable()) {
-      const { positivePersona } = generateDummyPersonaData();
-      return positivePersona;
-    }
-
-    const prompt = `
-      Based on the following user data, generate a positive AI persona:
-      ${JSON.stringify(personalityData, null, 2)}
-
-      Please provide:
-      - Personality traits with examples
-      - Core values
-      - Behavioral traits with examples
-      - Hobbies and interests
-      - A concise summary
-
-      Format the response as a JSON object.
-    `;
-
-    const response = await openai!.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert personality analyst.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 1000
-    });
-
-    return JSON.parse(response.choices[0].message.content || '{}');
-  } catch (error) {
-    console.error('Error generating AI persona:', error);
     return {
-      personality_traits: {},
-      core_values: {},
-      behavioral_traits: {},
-      hobbies_interests: {},
-      summary: "Error generating analysis"
+      overall: 0,
+      emotional: 0,
+      intellectual: 0,
+      lifestyle: 0,
+      summary: 'Unable to analyze compatibility at this time',
+      strengths: [],
+      challenges: [],
+      tips: [],
+      long_term_prediction: ''
     };
   }
 };
 
-export const generateNegativePersona = async (personalityData: any) => {
-  try {
-    if (!isOpenAIAvailable()) {
-      const { negativePersona } = generateDummyPersonaData();
-      return negativePersona;
+function transformAIResponseToPersonaAnalysis(aiResponse: any): PersonaAnalysis {
+  // Add debug logging
+  console.log('Transforming AI response:', JSON.stringify(aiResponse, null, 2));
+
+  const defaultAspect = {
+    traits: [],
+    examples: [],
+    summary: 'Not available',
+    intensity: 50
+  };
+
+  const result = {
+    positivePersona: {
+      personality_traits: transformAspect(aiResponse?.positivePersona?.personality_traits || defaultAspect),
+      core_values: transformAspect(aiResponse?.positivePersona?.core_values || defaultAspect),
+      behavioral_traits: transformAspect(aiResponse?.positivePersona?.behavioral_traits || defaultAspect),
+      hobbies_interests: transformAspect(aiResponse?.positivePersona?.hobbies_interests || defaultAspect)
+    },
+    negativePersona: {
+      emotional_aspects: transformAspect(aiResponse?.negativePersona?.emotional_aspects || defaultAspect),
+      social_aspects: transformAspect(aiResponse?.negativePersona?.social_aspects || defaultAspect),
+      lifestyle_aspects: transformAspect(aiResponse?.negativePersona?.lifestyle_aspects || defaultAspect),
+      relational_aspects: transformAspect(aiResponse?.negativePersona?.relational_aspects || defaultAspect)
     }
+  };
 
-    const prompt = `
-      Based on the following user data, generate a negative persona analysis:
-      ${JSON.stringify(personalityData, null, 2)}
+  // Add debug logging for the result
+  console.log('Transformed result:', JSON.stringify(result, null, 2));
 
-      Please provide:
-      - Emotional weaknesses with examples
-      - Social weaknesses with examples
-      - Intellectual weaknesses with examples
-      - Lifestyle weaknesses with examples
-      - Relational weaknesses with examples
-      - A concise summary
+  return result;
+}
 
-      Format the response as a JSON object.
-    `;
+function transformAIResponseToCompatibilityScore(aiResponse: any): CompatibilityScore {
+  return {
+    overall: aiResponse.overall_score || 0,
+    emotional: aiResponse.emotional_score || 0,
+    intellectual: aiResponse.intellectual_score || 0,
+    lifestyle: aiResponse.lifestyle_score || 0,
+    summary: aiResponse.summary || '',
+    strengths: aiResponse.strengths || [],
+    challenges: aiResponse.challenges || [],
+    tips: aiResponse.tips || [],
+    long_term_prediction: aiResponse.long_term_prediction || ''
+  };
+}
 
-    const response = await openai!.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert personality analyst.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 1000
-    });
+function transformAspect(aspect: any): PersonaAspect {
+  return {
+    traits: aspect?.traits || [],
+    examples: aspect?.examples || [],
+    summary: aspect?.summary || null,
+    intensity: aspect?.intensity
+  };
+}
 
-    return JSON.parse(response.choices[0].message.content || '{}');
-  } catch (error) {
-    console.error('Error generating negative persona:', error);
-    return {
-      emotional_weaknesses: {},
-      social_weaknesses: {},
-      intellectual_weaknesses: {},
-      lifestyle_weaknesses: {},
-      relational_weaknesses: {},
-      summary: "Error generating analysis"
-    };
-  }
+export default {
+  generatePersonaAnalysis,
+  generateDetailedPersonaAnalysis,
+  analyzeDetailedCompatibility
 };

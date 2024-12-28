@@ -3,10 +3,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { profileService } from '../../services/supabaseService';
 import { supabase } from '../../lib/supabase';
 import { Bell, Check, MessageCircle, Heart, Eye, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface Notification {
   id: string;
-  type: 'REQUEST_RECEIVED' | 'REQUEST_APPROVED' | 'REQUEST_EXPIRED' | 'NEW_MESSAGE' | 'NEW_MATCH';
+  type: 'NEW_MATCH' | 'NEW_MESSAGE' | 'PROFILE_VIEW';
   content: any;
   read: boolean;
   created_at: string;
@@ -14,6 +15,7 @@ interface Notification {
 
 const NotificationCenter: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -60,6 +62,33 @@ const NotificationCenter: React.FC = () => {
     }
   };
 
+  const handleNotificationClick = async (notification: Notification) => {
+    try {
+      // Mark as read first
+      await handleMarkAsRead(notification.id);
+
+      // Navigate based on notification type
+      switch (notification.type) {
+        case 'NEW_MATCH':
+          navigate('/smart-matching');
+          break;
+        case 'NEW_MESSAGE':
+          navigate('/messages');
+          break;
+        case 'PROFILE_VIEW':
+          navigate('/profile');
+          break;
+        default:
+          break;
+      }
+
+      // Close notification panel
+      setIsOpen(false);
+    } catch (error) {
+      console.error('Error handling notification click:', error);
+    }
+  };
+
   const handleMarkAsRead = async (notificationId: string) => {
     try {
       await profileService.markNotificationAsRead(notificationId);
@@ -76,36 +105,14 @@ const NotificationCenter: React.FC = () => {
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'REQUEST_RECEIVED':
-        return <Eye className="h-5 w-5 text-blue-500" />;
-      case 'REQUEST_APPROVED':
-        return <Check className="h-5 w-5 text-green-500" />;
-      case 'REQUEST_EXPIRED':
-        return <AlertCircle className="h-5 w-5 text-amber-500" />;
-      case 'NEW_MESSAGE':
-        return <MessageCircle className="h-5 w-5 text-purple-500" />;
       case 'NEW_MATCH':
         return <Heart className="h-5 w-5 text-pink-500" />;
+      case 'NEW_MESSAGE':
+        return <MessageCircle className="h-5 w-5 text-purple-500" />;
+      case 'PROFILE_VIEW':
+        return <Eye className="h-5 w-5 text-blue-500" />;
       default:
         return <Bell className="h-5 w-5 text-gray-500" />;
-    }
-  };
-
-  const getNotificationMessage = (notification: Notification) => {
-    const { type, content } = notification;
-    switch (type) {
-      case 'REQUEST_RECEIVED':
-        return `New ${content.request_type.toLowerCase()} request received`;
-      case 'REQUEST_APPROVED':
-        return `Your ${content.request_type.toLowerCase()} request was approved`;
-      case 'REQUEST_EXPIRED':
-        return `A ${content.request_type.toLowerCase()} request has expired`;
-      case 'NEW_MESSAGE':
-        return 'You have a new message';
-      case 'NEW_MATCH':
-        return 'You have a new match!';
-      default:
-        return 'New notification';
     }
   };
 
@@ -140,10 +147,10 @@ const NotificationCenter: React.FC = () => {
               notifications.map(notification => (
                 <div
                   key={notification.id}
-                  className={`p-4 border-b border-gray-100 hover:bg-gray-50 ${
+                  className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
                     !notification.read ? 'bg-blue-50' : ''
                   }`}
-                  onClick={() => handleMarkAsRead(notification.id)}
+                  onClick={() => handleNotificationClick(notification)}
                 >
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0">
@@ -151,7 +158,7 @@ const NotificationCenter: React.FC = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900">
-                        {getNotificationMessage(notification)}
+                        {notification.content}
                       </p>
                       <p className="text-xs text-gray-500">
                         {new Date(notification.created_at).toLocaleString()}
