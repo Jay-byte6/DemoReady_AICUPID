@@ -1,19 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { profileService } from '../services/supabaseService';
-import { SmartMatch } from '../types';
-import toast from 'react-hot-toast';
-import DetailedCompatibilityView from '../components/compatibility/DetailedCompatibilityView';
+import { SmartMatch, CompatibilityScore } from '../types';
+import { toast } from 'react-hot-toast';
 import MatchGrid from '../components/matching/MatchGrid';
+import DetailedCompatibilityView from '../components/compatibility/DetailedCompatibilityView';
 
-const SmartMatching = () => {
+const SmartMatching: React.FC = () => {
   const { user } = useAuth();
   const [matches, setMatches] = useState<SmartMatch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState<string | null>(null);
-  const [selectedProfile, setSelectedProfile] = useState<SmartMatch | null>(null);
+  const [selectedMatch, setSelectedMatch] = useState<SmartMatch | null>(null);
   const [showDetailedView, setShowDetailedView] = useState(false);
+  const [loadingInsights, setLoadingInsights] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -22,123 +21,97 @@ const SmartMatching = () => {
   }, [user]);
 
   const loadMatches = async () => {
+    if (!user) return;
     try {
       setLoading(true);
-      setError(null);
-      const matchResults = await profileService.findTopMatches(user!.id);
-      console.log('Loaded matches:', matchResults);
-      setMatches(matchResults);
-    } catch (err) {
-      console.error('Error loading matches:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load matches');
+      const matchData = await profileService.findTopMatches(user.id);
+      setMatches(matchData);
+    } catch (error) {
+      console.error('Error loading matches:', error);
+      toast.error('Failed to load matches');
     } finally {
       setLoading(false);
     }
   };
 
   const handleToggleFavorite = async (matchId: string, isFavorite: boolean) => {
-    if (!user) return;
+    if (!user) {
+      toast.error('Please sign in to favorite profiles');
+      return;
+    }
     try {
-      if (isFavorite) {
-        await profileService.addToFavorites(user.id, matchId);
-        toast.success('Added to favorites');
+      const success = await profileService.toggleFavorite(user.id, matchId, isFavorite);
+      if (success) {
+        toast.success(isFavorite ? 'Added to favorites' : 'Removed from favorites');
+        setMatches(prevMatches =>
+          prevMatches.map(match =>
+            match.profile.user_id === matchId
+              ? { ...match, is_favorite: isFavorite }
+              : match
+          )
+        );
       } else {
-        await profileService.removeFromFavorites(user.id, matchId);
-        toast.success('Removed from favorites');
+        toast.error('Failed to update favorites');
       }
-
-      setMatches(prevMatches => 
-        prevMatches.map(match => 
-          match.profile.user_id === matchId 
-            ? { ...match, is_favorite: isFavorite }
-            : match
-        )
-      );
-    } catch (err: any) {
-      console.error('Error toggling favorite:', err);
-      toast.error(err.message || 'Failed to update favorites');
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      toast.error('Failed to update favorites');
     }
   };
 
-  const handleViewProfile = (match: SmartMatch) => {
-    setSelectedProfile(match);
-    setShowDetailedView(true);
-  };
-
-  const handleRefreshCompatibility = async (userId: string) => {
+  const handleViewCompatibility = async (userId: string) => {
     if (!user) return;
     try {
-      setRefreshing(userId);
-      const updatedInsights = await profileService.generateCompatibilityInsights(user.id, userId);
-      
-      setMatches(prevMatches =>
-        prevMatches.map(match =>
-          match.profile.user_id === userId
-            ? {
-                ...match,
-                compatibility_score: updatedInsights.compatibility_score,
-                compatibility_details: {
-                  strengths: updatedInsights.strengths,
-                  challenges: updatedInsights.challenges,
-                  tips: updatedInsights.tips,
-                  long_term_prediction: updatedInsights.long_term_prediction
-                },
-                last_updated: new Date().toISOString()
-              }
-            : match
-        )
-      );
-      toast.success('Compatibility insights updated');
-    } catch (err) {
-      console.error('Error refreshing compatibility:', err);
-      toast.error('Failed to refresh compatibility insights');
+      setLoadingInsights(true);
+      const compatibilityScore = await profileService.getCompatibilityAnalysis(user.id, userId);
+      if (compatibilityScore) {
+        const match = matches.find(m => m.profile.user_id === userId);
+        if (match) {
+          setSelectedMatch(match);
+          setShowDetailedView(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching compatibility insights:', error);
+      toast.error('Failed to load compatibility insights');
     } finally {
-      setRefreshing(null);
+      setLoadingInsights(false);
     }
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
-    );
+    return <div className="flex justify-center items-center h-screen">Loading matches...</div>;
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Smart Matches</h1>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
-          {error}
-        </div>
-      )}
-
+      <h1 className="text-2xl font-bold mb-6">Smart Matches</h1>
       <MatchGrid
         matches={matches}
         onToggleFavorite={handleToggleFavorite}
-        onRefreshCompatibility={handleRefreshCompatibility}
-        onViewProfile={handleViewProfile}
-        refreshing={refreshing}
+        onRefreshCompatibility={handleViewCompatibility}
+        onViewProfile={(match) => {
+          setSelectedMatch(match);
+          setShowDetailedView(true);
+        }}
+        refreshing={loadingInsights && selectedMatch ? selectedMatch.profile.user_id : null}
       />
-
-      {selectedProfile && showDetailedView && (
+      {showDetailedView && selectedMatch && (
         <DetailedCompatibilityView
           isOpen={showDetailedView}
           onClose={() => setShowDetailedView(false)}
           onBack={() => setShowDetailedView(false)}
-          profile={selectedProfile.profile}
+          profile={selectedMatch.profile}
           compatibility_details={{
-            overall: selectedProfile.compatibility_score,
-            emotional: Math.round(selectedProfile.compatibility_score * 0.9),
-            intellectual: Math.round(selectedProfile.compatibility_score * 0.95),
-            lifestyle: Math.round(selectedProfile.compatibility_score * 0.85),
-            summary: selectedProfile.compatibility_details.long_term_prediction,
-            strengths: selectedProfile.compatibility_details.strengths,
-            challenges: selectedProfile.compatibility_details.challenges,
-            tips: selectedProfile.compatibility_details.tips,
-            long_term_prediction: selectedProfile.compatibility_details.long_term_prediction
+            overall: selectedMatch.compatibility_score,
+            emotional: Math.round(selectedMatch.compatibility_score * 0.9),
+            intellectual: Math.round(selectedMatch.compatibility_score * 0.95),
+            lifestyle: Math.round(selectedMatch.compatibility_score * 0.85),
+            summary: selectedMatch.compatibility_details.long_term_prediction,
+            strengths: selectedMatch.compatibility_details.strengths,
+            challenges: selectedMatch.compatibility_details.challenges,
+            tips: selectedMatch.compatibility_details.tips,
+            long_term_prediction: selectedMatch.compatibility_details.long_term_prediction
           }}
         />
       )}

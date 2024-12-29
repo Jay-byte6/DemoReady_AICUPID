@@ -616,18 +616,18 @@ export const profileService = {
             if (!profile) return null;
 
             const smartMatch: SmartMatch = {
-              profile: {
-                id: profile.id,
-                user_id: profile.user_id,
+          profile: {
+            id: profile.id,
+            user_id: profile.user_id,
                 cupid_id: profile.cupid_id,
-                fullname: profile.fullname,
-                age: profile.age,
-                location: profile.location,
-                occupation: profile.occupation,
+            fullname: profile.fullname,
+            age: profile.age,
+            location: profile.location,
+              occupation: profile.occupation,
                 profile_image: profile.profile_image
-              },
+          },
               compatibility_score: match.compatibility_score,
-              compatibility_details: {
+          compatibility_details: {
                 strengths: match.strengths || [],
                 challenges: match.challenges || [],
                 tips: match.tips || [],
@@ -671,13 +671,13 @@ export const profileService = {
 
           const match: SmartMatch = {
             profile: {
-              id: profile.id,
-              user_id: profile.user_id,
+            id: profile.id,
+            user_id: profile.user_id,
               cupid_id: profile.cupid_id || undefined,
-              fullname: profile.fullname,
-              age: profile.age,
-              location: profile.location,
-              occupation: profile.occupation,
+            fullname: profile.fullname,
+            age: profile.age,
+            location: profile.location,
+            occupation: profile.occupation,
               profile_image: profile.profile_image
             },
             compatibility_score: compatibilityScore.overall,
@@ -715,11 +715,11 @@ export const profileService = {
       if (isFavorite) {
         // Add to favorites
         const { error: insertError } = await supabase
-          .from('favorite_profiles')
-          .insert({
-            user_id: userId,
+        .from('favorite_profiles')
+        .insert({
+          user_id: userId,
             favorite_user_id: targetUserId,
-            created_at: new Date().toISOString()
+          created_at: new Date().toISOString()
           });
 
         if (insertError) {
@@ -746,9 +746,9 @@ export const profileService = {
       } else {
         // Remove from favorites
         const { error: deleteError } = await supabase
-          .from('favorite_profiles')
-          .delete()
-          .eq('user_id', userId)
+        .from('favorite_profiles')
+        .delete()
+        .eq('user_id', userId)
           .eq('favorite_user_id', targetUserId);
 
         if (deleteError) {
@@ -831,7 +831,7 @@ export const profileService = {
     try {
       const { data, error } = await supabase
         .from('user_profiles')
-        .update({
+        .update({ 
           notification_preferences: preferences
         })
         .eq('user_id', userId)
