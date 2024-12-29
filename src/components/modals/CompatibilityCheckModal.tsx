@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { profileService } from '../services/supabaseService';
+import React, { useState } from 'react';
+import { profileService } from '../../services/supabaseService';
 import { toast } from 'react-hot-toast';
-import { User, Heart, ArrowLeft, X } from 'lucide-react';
+import { User, Heart, X } from 'lucide-react';
 import { motion } from 'framer-motion';
-import DetailedCompatibilityView from './compatibility/DetailedCompatibilityView';
-import { SmartMatchProfile, CompatibilityScore } from '../types';
+import DetailedCompatibilityView from '../compatibility/DetailedCompatibilityView';
+import { SmartMatchProfile, CompatibilityScore } from '../../types';
 
 interface CompatibilityCheckModalProps {
   isOpen: boolean;
@@ -35,23 +35,44 @@ const CompatibilityCheckModal: React.FC<CompatibilityCheckModalProps> = ({
       setLoading(true);
       setError(null);
       
+      console.log('Starting compatibility check for CUPID ID:', cupidId);
+      
       // Get profile and compatibility details
       const [profile, compatibility] = await Promise.all([
         profileService.getUserProfileByCupidId(cupidId),
         profileService.getCompatibilityAnalysis(userId, cupidId)
       ]);
 
+      console.log('Profile data:', profile);
+      console.log('Raw compatibility data:', compatibility);
+
       if (!profile || !compatibility) {
+        console.log('Missing data - Profile:', !!profile, 'Compatibility:', !!compatibility);
         throw new Error('Failed to fetch profile or compatibility data');
       }
+
+      // Transform compatibility data to ensure correct format
+      const formattedCompatibility = {
+        ...compatibility,
+        overall: Number(compatibility.overall) || 0,
+        emotional: Number(compatibility.emotional) || 0,
+        intellectual: Number(compatibility.intellectual) || 0,
+        lifestyle: Number(compatibility.lifestyle) || 0
+      };
+
+      console.log('Formatted compatibility data:', formattedCompatibility);
 
       // Check if profile is favorited
       const favorites = await profileService.getFavoriteProfiles(userId);
       const isFav = favorites.some(f => f.profile.user_id === profile.user_id);
 
       setMatchProfile(profile);
-      setCompatibilityDetails(compatibility);
+      setCompatibilityDetails(formattedCompatibility);
       setIsFavorite(isFav);
+
+      // Log state updates
+      console.log('Updated state - Profile:', profile);
+      console.log('Updated state - Compatibility:', formattedCompatibility);
     } catch (err: any) {
       console.error('Error fetching compatibility data:', err);
       setError(err.message || 'Failed to fetch compatibility data');
@@ -207,10 +228,10 @@ const CompatibilityCheckModal: React.FC<CompatibilityCheckModalProps> = ({
                       fill="none"
                       stroke="#4F46E5"
                       strokeWidth="3"
-                      strokeDasharray={`${compatibilityDetails.overall * 100}, 100`}
+                      strokeDasharray={`${(compatibilityDetails.overall || 0) * 0.95}, 100`}
                     />
                     <text x="18" y="20.35" className="text-3xl font-bold" textAnchor="middle" fill="#4F46E5">
-                      {Math.round(compatibilityDetails.overall * 100)}%
+                      {compatibilityDetails.overall || 0}%
                     </text>
                   </svg>
                 </div>
@@ -222,31 +243,31 @@ const CompatibilityCheckModal: React.FC<CompatibilityCheckModalProps> = ({
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Emotional</h4>
                   <div className="h-2 bg-gray-200 rounded-full">
                     <div
-                      className="h-full bg-indigo-600 rounded-full"
-                      style={{ width: `${compatibilityDetails.emotional * 100}%` }}
+                      className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                      style={{ width: `${compatibilityDetails.emotional || 0}%` }}
                     />
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">{Math.round(compatibilityDetails.emotional * 100)}%</p>
+                  <p className="text-sm text-gray-600 mt-1">{compatibilityDetails.emotional || 0}%</p>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Intellectual</h4>
                   <div className="h-2 bg-gray-200 rounded-full">
                     <div
-                      className="h-full bg-indigo-600 rounded-full"
-                      style={{ width: `${compatibilityDetails.intellectual * 100}%` }}
+                      className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                      style={{ width: `${compatibilityDetails.intellectual || 0}%` }}
                     />
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">{Math.round(compatibilityDetails.intellectual * 100)}%</p>
+                  <p className="text-sm text-gray-600 mt-1">{compatibilityDetails.intellectual || 0}%</p>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Lifestyle</h4>
                   <div className="h-2 bg-gray-200 rounded-full">
                     <div
-                      className="h-full bg-indigo-600 rounded-full"
-                      style={{ width: `${compatibilityDetails.lifestyle * 100}%` }}
+                      className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                      style={{ width: `${compatibilityDetails.lifestyle || 0}%` }}
                     />
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">{Math.round(compatibilityDetails.lifestyle * 100)}%</p>
+                  <p className="text-sm text-gray-600 mt-1">{compatibilityDetails.lifestyle || 0}%</p>
                 </div>
               </div>
             </div>
@@ -291,4 +312,4 @@ const CompatibilityCheckModal: React.FC<CompatibilityCheckModalProps> = ({
   );
 };
 
-export default CompatibilityCheckModal;
+export default CompatibilityCheckModal; 

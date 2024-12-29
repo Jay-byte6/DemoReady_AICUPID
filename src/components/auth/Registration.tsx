@@ -3,13 +3,29 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { profileService } from '../../services/supabaseService';
 import ErrorAlert from '../ErrorAlert';
+import { supabase } from '../../lib/supabase';
+import { toast } from 'react-hot-toast';
+
+interface FormData {
+  email: string;
+  password: string;
+  fullname: string;
+  age: string;
+  gender: string;
+  location: string;
+  occupation: string;
+  relationship_history: string;
+  lifestyle: string;
+}
 
 const Registration = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
+    email: '',
+    password: '',
     fullname: '',
     age: '',
     gender: '',
@@ -40,37 +56,37 @@ const Registration = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!user) {
-      setError('You must be logged in to complete registration');
-      return;
-    }
-
-    const validationError = validateForm();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
     try {
       setIsSubmitting(true);
       setError(null);
 
-      // Create user profile (CUPID ID will be generated automatically)
-      const profile = await profileService.updateUserProfile(user.id, {
-        ...formData,
-        email: user.email
+      // Sign up with Supabase
+      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password
       });
 
-      if (!profile) {
-        throw new Error('Failed to create profile');
-      }
+      if (signUpError) throw signUpError;
+      if (!user) throw new Error('Failed to create user');
 
-      // Navigate to personality analysis
+      // Create user profile
+      const profile = await profileService.updateUserProfile(user.id, {
+        fullname: formData.fullname,
+        age: parseInt(formData.age) || 0,
+        gender: formData.gender,
+        location: formData.location,
+        occupation: formData.occupation,
+        relationship_history: formData.relationship_history,
+        lifestyle: formData.lifestyle
+      });
+
+      if (!profile) throw new Error('Failed to create profile');
+
+      toast.success('Registration successful! Please check your email to verify your account.');
       navigate('/personality-analysis');
     } catch (err: any) {
       console.error('Registration error:', err);
-      setError(err.message || 'Failed to complete registration');
+      setError(err.message || 'Failed to register');
     } finally {
       setIsSubmitting(false);
     }

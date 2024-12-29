@@ -1,78 +1,93 @@
-import React, { useRef, useState } from 'react';
-import { Camera, X, Upload, Loader2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
 import { profileService } from '../../services/supabaseService';
+import { toast } from 'react-hot-toast';
 
-interface Props {
+interface ProfileImageUploadProps {
   userId: string;
   currentImage: string | null;
-  onImageUpdate: (newImageUrl: string) => void;
+  onImageUpdate: (imageUrl: string) => void;
 }
 
-const ProfileImageUpload: React.FC<Props> = ({ userId, currentImage, onImageUpdate }) => {
-  const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const ProfileImageUpload: React.FC<ProfileImageUploadProps> = ({
+  userId,
+  currentImage,
+  onImageUpdate
+}) => {
+  const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
+    // Check file type
     if (!file.type.startsWith('image/')) {
-      setError('Please select an image file');
+      toast.error('Please upload an image file');
       return;
     }
 
-    // Validate file size (max 5MB)
+    // Check file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      setError('Image size should be less than 5MB');
+      toast.error('Image size should be less than 5MB');
       return;
     }
 
     try {
-      setIsUploading(true);
-      setError(null);
-
-      const updatedProfile = await profileService.uploadProfileImage(userId, file);
-      if (updatedProfile?.profile_image) {
-        onImageUpdate(updatedProfile.profile_image);
+      setUploading(true);
+      const imageUrl = await profileService.uploadProfileImage(userId, file);
+      if (imageUrl) {
+        onImageUpdate(imageUrl);
+        toast.success('Profile image updated successfully');
       }
     } catch (err: any) {
       console.error('Error uploading image:', err);
-      setError(err.message || 'Failed to upload image');
+      toast.error(err.message || 'Failed to upload image');
     } finally {
-      setIsUploading(false);
+      setUploading(false);
     }
   };
 
-  const handleDelete = async () => {
+  const handleRemoveImage = async () => {
     if (!currentImage) return;
 
     try {
-      setIsUploading(true);
-      setError(null);
-
-      await profileService.deleteProfileImage(userId);
+      setUploading(true);
+      await profileService.removeProfileImage(userId);
       onImageUpdate('');
+      toast.success('Profile image removed successfully');
     } catch (err: any) {
-      console.error('Error deleting image:', err);
-      setError(err.message || 'Failed to delete image');
+      console.error('Error removing image:', err);
+      toast.error(err.message || 'Failed to remove image');
     } finally {
-      setIsUploading(false);
+      setUploading(false);
     }
   };
 
   return (
-    <div className="relative">
-      <div className="w-32 h-32 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden">
+    <div className="flex flex-col items-center space-y-4">
+      <div
+        className="relative w-32 h-32 rounded-full overflow-hidden cursor-pointer group"
+        onClick={handleImageClick}
+      >
         {currentImage ? (
-          <img
-            src={currentImage}
-            alt="Profile"
-            className="w-full h-full object-cover"
-          />
+          <>
+            <img
+              src={currentImage}
+              alt="Profile"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="text-white text-sm">Change Photo</span>
+            </div>
+          </>
         ) : (
-          <Camera className="w-16 h-16 text-indigo-300" />
+          <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+            <span className="text-gray-500 text-4xl">+</span>
+          </div>
         )}
       </div>
 
@@ -80,40 +95,24 @@ const ProfileImageUpload: React.FC<Props> = ({ userId, currentImage, onImageUpda
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        onChange={handleFileChange}
         className="hidden"
-        onChange={handleFileSelect}
       />
 
-      <div className="absolute -bottom-2 -right-2 flex space-x-2">
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isUploading}
-          className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-50 disabled:bg-gray-100"
-          title="Upload new image"
-        >
-          {isUploading ? (
-            <Loader2 className="w-5 h-5 text-gray-600 animate-spin" />
-          ) : (
-            <Upload className="w-5 h-5 text-gray-600" />
-          )}
-        </button>
-
-        {currentImage && (
-          <button
-            onClick={handleDelete}
-            disabled={isUploading}
-            className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-50 disabled:bg-gray-100"
-            title="Remove image"
-          >
-            <X className="w-5 h-5 text-gray-600" />
-          </button>
-        )}
-      </div>
-
-      {error && (
-        <div className="absolute top-full mt-2 w-48 bg-red-50 text-red-600 text-sm p-2 rounded-lg">
-          {error}
+      {uploading && (
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-sm text-gray-600">Uploading...</p>
         </div>
+      )}
+
+      {currentImage && !uploading && (
+        <button
+          onClick={handleRemoveImage}
+          className="text-sm text-red-500 hover:text-red-600"
+        >
+          Remove Photo
+        </button>
       )}
     </div>
   );

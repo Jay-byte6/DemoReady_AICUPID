@@ -8,6 +8,10 @@ BEGIN
             user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
             target_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
             compatibility_score FLOAT NOT NULL,
+            emotional_score FLOAT,
+            intellectual_score FLOAT,
+            lifestyle_score FLOAT,
+            summary TEXT,
             strengths TEXT[] DEFAULT '{}',
             challenges TEXT[] DEFAULT '{}',
             tips TEXT[] DEFAULT '{}',
@@ -69,40 +73,4 @@ BEGIN
     ALTER TABLE public.smart_matches ENABLE ROW LEVEL SECURITY;
     ALTER TABLE public.favorite_profiles ENABLE ROW LEVEL SECURITY;
 
-    -- Create or update policies (will not throw errors if they exist)
-    DO $policies$
-    BEGIN
-        -- Drop and recreate policies for smart_matches if they don't exist
-        IF NOT EXISTS (SELECT FROM pg_policies WHERE tablename = 'smart_matches' AND policyname = 'Users can view their own smart matches') THEN
-            CREATE POLICY "Users can view their own smart matches"
-                ON public.smart_matches
-                FOR SELECT
-                USING (auth.uid() = user_id);
-        END IF;
-
-        IF NOT EXISTS (SELECT FROM pg_policies WHERE tablename = 'smart_matches' AND policyname = 'Users can manage their own smart matches') THEN
-            CREATE POLICY "Users can manage their own smart matches"
-                ON public.smart_matches
-                FOR ALL
-                USING (auth.uid() = user_id);
-        END IF;
-
-        -- Drop and recreate policies for favorite_profiles if they don't exist
-        IF NOT EXISTS (SELECT FROM pg_policies WHERE tablename = 'favorite_profiles' AND policyname = 'Users can view their own favorite profiles') THEN
-            CREATE POLICY "Users can view their own favorite profiles"
-                ON public.favorite_profiles
-                FOR SELECT
-                USING (auth.uid() = user_id);
-        END IF;
-
-        IF NOT EXISTS (SELECT FROM pg_policies WHERE tablename = 'favorite_profiles' AND policyname = 'Users can manage their own favorite profiles') THEN
-            CREATE POLICY "Users can manage their own favorite profiles"
-                ON public.favorite_profiles
-                FOR ALL
-                USING (auth.uid() = user_id);
-        END IF;
-    END
-    $policies$;
-
-END
-$$; 
+END $$; 

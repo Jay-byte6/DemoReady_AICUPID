@@ -39,21 +39,19 @@ const SmartMatching = () => {
   const handleToggleFavorite = async (matchId: string, isFavorite: boolean) => {
     if (!user) return;
     try {
-      if (isFavorite) {
-        await profileService.addToFavorites(user.id, matchId);
-        toast.success('Added to favorites');
+      const success = await profileService.toggleFavorite(user.id, matchId, isFavorite);
+      if (success) {
+        toast.success(isFavorite ? 'Added to favorites' : 'Removed from favorites');
+        setMatches(prevMatches => 
+          prevMatches.map(match => 
+            match.profile.user_id === matchId 
+              ? { ...match, is_favorite: isFavorite }
+              : match
+          )
+        );
       } else {
-        await profileService.removeFromFavorites(user.id, matchId);
-        toast.success('Removed from favorites');
+        toast.error('Failed to update favorites');
       }
-
-      setMatches(prevMatches => 
-        prevMatches.map(match => 
-          match.profile.user_id === matchId 
-            ? { ...match, is_favorite: isFavorite }
-            : match
-        )
-      );
     } catch (err: any) {
       console.error('Error toggling favorite:', err);
       toast.error(err.message || 'Failed to update favorites');
@@ -69,26 +67,27 @@ const SmartMatching = () => {
     if (!user) return;
     try {
       setRefreshing(userId);
-      const updatedInsights = await profileService.generateCompatibilityInsights(user.id, userId);
-      
-      setMatches(prevMatches =>
-        prevMatches.map(match =>
-          match.profile.user_id === userId
-            ? {
-                ...match,
-                compatibility_score: updatedInsights.compatibility_score,
-                compatibility_details: {
-                  strengths: updatedInsights.strengths,
-                  challenges: updatedInsights.challenges,
-                  tips: updatedInsights.tips,
-                  long_term_prediction: updatedInsights.long_term_prediction
-                },
-                last_updated: new Date().toISOString()
-              }
-            : match
-        )
-      );
-      toast.success('Compatibility insights updated');
+      const compatibilityScore = await profileService.getCompatibilityAnalysis(user.id, userId);
+      if (compatibilityScore) {
+        setMatches(prevMatches =>
+          prevMatches.map(match =>
+            match.profile.user_id === userId
+              ? {
+                  ...match,
+                  compatibility_score: compatibilityScore.overall,
+                  compatibility_details: {
+                    strengths: compatibilityScore.strengths,
+                    challenges: compatibilityScore.challenges,
+                    tips: compatibilityScore.tips,
+                    long_term_prediction: compatibilityScore.long_term_prediction
+                  },
+                  last_updated: new Date().toISOString()
+                }
+              : match
+          )
+        );
+        toast.success('Compatibility insights updated');
+      }
     } catch (err) {
       console.error('Error refreshing compatibility:', err);
       toast.error('Failed to refresh compatibility insights');

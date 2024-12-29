@@ -10,6 +10,15 @@ const Home = () => {
   const navigate = useNavigate();
   const [showCompatibilityModal, setShowCompatibilityModal] = useState(false);
 
+  // Only show compatibility check if user is logged in
+  const handleCompatibilityCheck = () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    setShowCompatibilityModal(true);
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Hero Section */}
@@ -21,7 +30,7 @@ const Home = () => {
       {/* Check Compatibility Button */}
       <div className="max-w-xl mx-auto mb-12">
         <button
-          onClick={() => setShowCompatibilityModal(true)}
+          onClick={handleCompatibilityCheck}
           className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center justify-center"
         >
           <span className="mr-2">🔍</span>
@@ -107,10 +116,13 @@ const Home = () => {
       </div>
 
       {/* Compatibility Check Modal */}
-      <CompatibilityCheckModal
-        isOpen={showCompatibilityModal}
-        onClose={() => setShowCompatibilityModal(false)}
-      />
+      {user && (
+        <CompatibilityCheckModal
+          isOpen={showCompatibilityModal}
+          onClose={() => setShowCompatibilityModal(false)}
+          userId={user.id}
+        />
+      )}
     </div>
   );
 };

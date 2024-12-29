@@ -93,30 +93,25 @@ export interface AIPersona {
 }
 
 export interface UserProfile {
-  id: string;
+  id?: string;
   user_id: string;
-  cupid_id: string;
   fullname: string;
   age: number;
-  location: string;
   gender: string;
+  location: string;
   occupation: string;
   relationship_history: string;
   lifestyle: string;
-  interests?: string[];
   profile_image: string | null;
-  email?: string;
-  phone?: string;
-  created_at: string;
-  updated_at: string;
-  matching_preferences?: any;
-  notification_preferences?: any;
+  cupid_id: string;
+  created_at?: string;
+  updated_at?: string;
   visibility_settings?: {
-    smart_matching_visible?: boolean;
-    profile_image_visible?: boolean;
-    occupation_visible?: boolean;
-    contact_visible?: boolean;
-    master_visibility?: boolean;
+    smart_matching_visible: boolean;
+    profile_image_visible: boolean;
+    occupation_visible: boolean;
+    contact_visible: boolean;
+    master_visibility: boolean;
   };
 }
 
@@ -233,8 +228,11 @@ export interface SmartMatchProfile {
   cupid_id?: string;
   fullname: string;
   age?: number;
+  gender?: string;
   location?: string;
   occupation?: string;
+  relationship_history?: string;
+  lifestyle?: string;
   profile_image?: string | null;
   interests?: string[];
   visibility_settings?: {
@@ -249,9 +247,10 @@ export interface SmartMatchProfile {
 export interface SmartMatch {
   id?: string;
   user_id?: string;
-  profile: SmartMatchProfile;
+  profile: UserProfile;
   compatibility_score: number;
   compatibility_details: {
+    summary: string;
     strengths: string[];
     challenges: string[];
     tips: string[];

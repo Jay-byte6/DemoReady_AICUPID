@@ -8,7 +8,8 @@ import {
   PositivePersona,
   NegativePersona,
   SmartMatch,
-  NotificationData
+  NotificationData,
+  SmartMatchProfile
 } from '../types';
 import { generateDetailedPersonaAnalysis, analyzeDetailedCompatibility } from './openai';
 
@@ -39,53 +40,14 @@ interface PersonaVersion {
 export const profileService = {
   async getUserProfile(userId: string): Promise<UserProfile | null> {
     try {
-      console.log('Fetching user profile for:', userId);
       const { data, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('user_id', userId)
-        .maybeSingle();
+        .single();
 
-      if (error) {
-        console.error('Supabase error fetching profile:', error);
-        return null;
-      }
-
-      if (!data) {
-        console.log('No profile found, creating default profile for user:', userId);
-        // Create a default profile with minimal required fields
-        const defaultProfile = {
-          user_id: userId,
-          cupid_id: `CUPID-${userId.substring(0, 6).toUpperCase()}`,
-          fullname: '',
-          age: 0,
-          location: '',
-          gender: '',
-          occupation: '',
-          relationship_history: '',
-          lifestyle: '',
-          profile_image: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-
-        const { data: newProfile, error: createError } = await supabase
-          .from('user_profiles')
-          .insert(defaultProfile)
-          .select()
-          .single();
-
-        if (createError) {
-          console.error('Error creating default profile:', createError);
-          return null;
-        }
-
-        // Generate initial persona analysis for the new profile
-        await this.generateAndStorePersonaAnalysis(userId);
-        return newProfile;
-      }
-
-      return data as UserProfile;
+      if (error) throw error;
+      return data;
     } catch (error) {
       console.error('Error getting user profile:', error);
       return null;
@@ -94,43 +56,15 @@ export const profileService = {
 
   async updateUserProfile(userId: string, profile: Partial<UserProfile>): Promise<UserProfile | null> {
     try {
-      console.log('Updating profile for user:', userId);
-      
-      // First check if profile exists
-      const existingProfile = await this.getUserProfile(userId);
-      
       const { data, error } = await supabase
         .from('user_profiles')
-        .upsert({
-          user_id: userId,
-          ...profile,
-          id: existingProfile?.id || undefined,
-          created_at: existingProfile?.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
+        .update(profile)
+        .eq('user_id', userId)
         .select()
         .single();
 
-      if (error) {
-        console.error('Supabase error updating profile:', error);
-        return null;
-      }
-
-      // Check if relevant fields changed and trigger persona generation
-      const relevantFieldsChanged = this.haveRelevantFieldsChanged(
-        existingProfile,
-        { ...existingProfile, ...profile },
-        null,
-        null
-      );
-
-      if (relevantFieldsChanged) {
-        // Trigger persona generation in the background
-        this.generateAndStorePersonaAnalysis(userId, true, 'PROFILE_UPDATE')
-          .catch(error => console.error('Error generating persona after profile update:', error));
-      }
-
-      return data as UserProfile;
+      if (error) throw error;
+      return data;
     } catch (error) {
       console.error('Error updating user profile:', error);
       return null;
@@ -468,27 +402,54 @@ export const profileService = {
     };
   },
 
-  async getCompatibilityAnalysis(userId: string, targetUserId: string): Promise<CompatibilityScore | null> {
+  async getCompatibilityAnalysis(userId: string, targetCupidId: string): Promise<CompatibilityScore | null> {
     try {
-      // First check if we have a stored compatibility score
-      const { data: storedScore } = await supabase
-        .from('compatibility_scores')
+      // First get the target user's profile using their CUPID ID
+      const { data: targetProfile, error: targetError } = await supabase
+        .from('user_profiles')
+        .select('user_id')
+        .eq('cupid_id', targetCupidId)
+        .single();
+
+      if (targetError || !targetProfile) {
+        console.warn('Target profile not found for CUPID ID:', targetCupidId);
+        return null;
+      }
+
+      const targetUserId = targetProfile.user_id;
+
+      // Check if we have a stored compatibility score
+      const { data: storedMatch, error: matchError } = await supabase
+        .from('smart_matches')
         .select('*')
         .eq('user_id', userId)
         .eq('target_user_id', targetUserId)
         .single();
 
-      if (storedScore) {
-        return this.transformAIResponseToCompatibilityScore(storedScore as StoredCompatibilityScore);
+      if (storedMatch) {
+        console.log('Found stored match:', storedMatch);
+        const compatibilityScore = {
+          overall: Math.round(Number(storedMatch.compatibility_score)) || 0,
+          emotional: Math.round(Number(storedMatch.emotional_score)) || 0,
+          intellectual: Math.round(Number(storedMatch.intellectual_score)) || 0,
+          lifestyle: Math.round(Number(storedMatch.lifestyle_score)) || 0,
+          summary: storedMatch.summary || '',
+          strengths: storedMatch.strengths || [],
+          challenges: storedMatch.challenges || [],
+          tips: storedMatch.tips || [],
+          long_term_prediction: storedMatch.long_term_prediction || ''
+        };
+        console.log('Transformed compatibility score:', compatibilityScore);
+        return compatibilityScore;
       }
 
       // If no stored score, generate a new one
-      const [userProfile, targetProfile] = await Promise.all([
+      const [userProfile, fullTargetProfile] = await Promise.all([
         this.getUserProfile(userId),
         this.getUserProfile(targetUserId)
       ]);
 
-      if (!userProfile || !targetProfile) {
+      if (!userProfile || !fullTargetProfile) {
         console.warn('One or both profiles not found');
         return null;
       }
@@ -500,31 +461,31 @@ export const profileService = {
 
       const compatibilityScore = await analyzeDetailedCompatibility(
         userProfile,
-        targetProfile,
+        fullTargetProfile,
         userPersona && targetPersona ? {
           persona1: userPersona,
           persona2: targetPersona
         } : undefined
       );
 
-      // Store the new compatibility score
+      // Store the new compatibility score in smart_matches
       if (compatibilityScore) {
         const { error: storeError } = await supabase
-          .from('compatibility_scores')
+          .from('smart_matches')
           .upsert({
             user_id: userId,
             target_user_id: targetUserId,
-            overall_score: compatibilityScore.overall,
-            emotional_score: compatibilityScore.emotional,
-            intellectual_score: compatibilityScore.intellectual,
-            lifestyle_score: compatibilityScore.lifestyle,
+            compatibility_score: Math.round(Number(compatibilityScore.overall)),
+            emotional_score: Math.round(Number(compatibilityScore.emotional)),
+            intellectual_score: Math.round(Number(compatibilityScore.intellectual)),
+            lifestyle_score: Math.round(Number(compatibilityScore.lifestyle)),
             summary: compatibilityScore.summary,
             strengths: compatibilityScore.strengths,
             challenges: compatibilityScore.challenges,
             tips: compatibilityScore.tips,
             long_term_prediction: compatibilityScore.long_term_prediction,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            last_updated: new Date().toISOString(),
+            created_at: new Date().toISOString()
           });
 
         if (storeError) {
@@ -537,20 +498,6 @@ export const profileService = {
       console.error('Error getting compatibility analysis:', error);
       return null;
     }
-  },
-
-  transformAIResponseToCompatibilityScore(analysis: StoredCompatibilityScore): CompatibilityScore {
-    return {
-      overall: analysis.overall_score,
-      emotional: analysis.emotional_score,
-      intellectual: analysis.intellectual_score,
-      lifestyle: analysis.lifestyle_score,
-      summary: analysis.summary,
-      strengths: analysis.strengths,
-      challenges: analysis.challenges,
-      tips: analysis.tips,
-      long_term_prediction: analysis.long_term_prediction
-    };
   },
 
   async findTopMatches(userId: string): Promise<SmartMatch[]> {
@@ -616,18 +563,22 @@ export const profileService = {
             if (!profile) return null;
 
             const smartMatch: SmartMatch = {
-          profile: {
-            id: profile.id,
-            user_id: profile.user_id,
+              profile: {
+                id: profile.id,
+                user_id: profile.user_id,
                 cupid_id: profile.cupid_id,
-            fullname: profile.fullname,
-            age: profile.age,
-            location: profile.location,
-              occupation: profile.occupation,
-                profile_image: profile.profile_image
-          },
+                fullname: profile.fullname,
+                age: profile.age,
+                location: profile.location,
+                occupation: profile.occupation,
+                profile_image: profile.profile_image,
+                gender: '',
+                relationship_history: '',
+                lifestyle: ''
+              },
               compatibility_score: match.compatibility_score,
-          compatibility_details: {
+              compatibility_details: {
+                summary: match.summary,
                 strengths: match.strengths || [],
                 challenges: match.challenges || [],
                 tips: match.tips || [],
@@ -658,6 +609,7 @@ export const profileService = {
               user_id: userId,
               target_user_id: profile.user_id,
               compatibility_score: compatibilityScore.overall,
+              summary: compatibilityScore.summary,
               strengths: compatibilityScore.strengths,
               challenges: compatibilityScore.challenges,
               tips: compatibilityScore.tips,
@@ -671,17 +623,21 @@ export const profileService = {
 
           const match: SmartMatch = {
             profile: {
-            id: profile.id,
-            user_id: profile.user_id,
-              cupid_id: profile.cupid_id || undefined,
-            fullname: profile.fullname,
-            age: profile.age,
-            location: profile.location,
-            occupation: profile.occupation,
-              profile_image: profile.profile_image
+              id: profile.id,
+              user_id: profile.user_id,
+              cupid_id: profile.cupid_id,
+              fullname: profile.fullname,
+              age: profile.age,
+              location: profile.location,
+              occupation: profile.occupation,
+              profile_image: profile.profile_image,
+              gender: '',
+              relationship_history: '',
+              lifestyle: ''
             },
             compatibility_score: compatibilityScore.overall,
             compatibility_details: {
+              summary: compatibilityScore.summary,
               strengths: compatibilityScore.strengths,
               challenges: compatibilityScore.challenges,
               tips: compatibilityScore.tips,
@@ -736,6 +692,7 @@ export const profileService = {
               user_id: userId,
               target_user_id: targetUserId,
               compatibility_score: compatibilityScore.overall,
+              summary: compatibilityScore.summary,
               strengths: compatibilityScore.strengths,
               challenges: compatibilityScore.challenges,
               tips: compatibilityScore.tips,
@@ -912,6 +869,7 @@ export const profileService = {
           if (storedMatch) {
             compatibilityScore = {
               overall: storedMatch.compatibility_score,
+              summary: storedMatch.summary,
               strengths: storedMatch.strengths,
               challenges: storedMatch.challenges,
               tips: storedMatch.tips,
@@ -927,6 +885,7 @@ export const profileService = {
                   user_id: userId,
                   target_user_id: profile.user_id,
                   compatibility_score: compatibilityScore.overall,
+                  summary: compatibilityScore.summary,
                   strengths: compatibilityScore.strengths,
                   challenges: compatibilityScore.challenges,
                   tips: compatibilityScore.tips,
@@ -947,10 +906,14 @@ export const profileService = {
               age: profile.age,
               location: profile.location,
               occupation: profile.occupation,
-              profile_image: profile.profile_image
+              profile_image: profile.profile_image,
+              gender: '',
+              relationship_history: '',
+              lifestyle: ''
             },
             compatibility_score: compatibilityScore.overall,
             compatibility_details: {
+              summary: compatibilityScore.summary,
               strengths: compatibilityScore.strengths,
               challenges: compatibilityScore.challenges,
               tips: compatibilityScore.tips,
@@ -1078,6 +1041,94 @@ export const profileService = {
     } catch (error) {
       console.error('Error saving personality analysis:', error);
       return false;
+    }
+  },
+
+  async uploadProfileImage(userId: string, file: File): Promise<string | null> {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${userId}/profile-image.${fileExt}`;
+
+      // Upload file to storage
+      const { error: uploadError } = await supabase.storage
+        .from('profile-images')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile-images')
+        .getPublicUrl(filePath);
+
+      // Update user profile with new image URL
+      await this.updateUserProfile(userId, { profile_image: publicUrl });
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading profile image:', error);
+      throw error;
+    }
+  },
+
+  async removeProfileImage(userId: string): Promise<void> {
+    try {
+      // Remove file from storage
+      const { error: deleteError } = await supabase.storage
+        .from('profile-images')
+        .remove([`${userId}/profile-image.*`]);
+
+      if (deleteError) throw deleteError;
+
+      // Update user profile to remove image URL
+      await this.updateUserProfile(userId, { profile_image: null });
+    } catch (error) {
+      console.error('Error removing profile image:', error);
+      throw error;
+    }
+  },
+
+  async getUserProfileByCupidId(cupidId: string): Promise<SmartMatchProfile | null> {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select(`
+          id,
+          user_id,
+          cupid_id,
+          fullname,
+          age,
+          location,
+          occupation,
+          profile_image,
+          gender,
+          relationship_history,
+          lifestyle
+        `)
+        .eq('cupid_id', cupidId)
+        .single();
+
+      if (error || !data) {
+        console.error('Error getting user profile by CUPID ID:', error);
+        return null;
+      }
+
+      return {
+        id: data.id,
+        user_id: data.user_id,
+        cupid_id: data.cupid_id,
+        fullname: data.fullname,
+        age: data.age,
+        location: data.location,
+        occupation: data.occupation,
+        profile_image: data.profile_image,
+        gender: data.gender || '',
+        relationship_history: data.relationship_history || '',
+        lifestyle: data.lifestyle || ''
+      };
+    } catch (error) {
+      console.error('Error getting user profile by CUPID ID:', error);
+      return null;
     }
   }
 };

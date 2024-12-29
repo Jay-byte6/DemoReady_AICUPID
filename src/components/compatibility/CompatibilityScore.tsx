@@ -8,7 +8,7 @@ interface Props {
 }
 
 const CompatibilityScore: React.FC<Props> = ({ emotional, intellectual, lifestyle }) => {
-  const formatScore = (score: number) => Math.round(score * 100);
+  const formatScore = (score: number) => Math.round(score || 0);
 
   return (
     <div className="grid grid-cols-3 gap-4">

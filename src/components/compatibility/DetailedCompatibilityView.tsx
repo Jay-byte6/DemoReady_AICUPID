@@ -156,7 +156,8 @@ const DetailedCompatibilityView: React.FC<Props> = ({
                         pathColor: getScoreColor(compatibility_details.overall),
                         textColor: getScoreColor(compatibility_details.overall),
                         trailColor: '#E5E7EB',
-                        pathTransitionDuration: 1
+                        pathTransitionDuration: 1,
+                        strokeLinecap: 'round'
                       })}
                     />
                   </div>
@@ -182,35 +183,57 @@ const DetailedCompatibilityView: React.FC<Props> = ({
                   <Target className="w-6 h-6 mr-2" />
                   Compatibility Metrics
                 </h3>
-                <div className="space-y-6">
-                  {metrics.map((metric, index) => (
-                    <div key={metric.label} className="space-y-3">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <h4 className="font-medium text-gray-800">{metric.label}</h4>
-                          <p className="text-xs text-gray-500">{metric.description}</p>
-                        </div>
-                        <span className="text-sm font-medium text-indigo-600">
-                          {metric.value}%
-                        </span>
-                      </div>
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: '100%' }}
-                        transition={{ duration: 0.8, delay: index * 0.2 }}
-                        className="mb-4"
-                      >
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${metric.value}%` }}
-                            transition={{ duration: 0.8, delay: index * 0.2 }}
-                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
-                          />
-                        </div>
-                      </motion.div>
+                <div className="flex items-center justify-center mb-8">
+                  <div className="relative w-32 h-32">
+                    <CircularProgressbar
+                      value={compatibility_details.overall}
+                      text={`${compatibility_details.overall}%`}
+                      styles={buildStyles({
+                        textSize: '20px',
+                        pathColor: '#4F46E5',
+                        textColor: '#4F46E5',
+                        trailColor: '#E2E8F0'
+                      })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Emotional</h3>
+                    <div className="h-2 bg-gray-200 rounded-full mb-1">
+                      <div
+                        className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                        style={{ width: `${compatibility_details.emotional}%` }}
+                      />
                     </div>
-                  ))}
+                    <p className="text-sm text-gray-600">{compatibility_details.emotional}%</p>
+                    <p className="text-sm text-gray-500 mt-1">Measures how well you connect on an emotional level</p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Intellectual</h3>
+                    <div className="h-2 bg-gray-200 rounded-full mb-1">
+                      <div
+                        className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                        style={{ width: `${compatibility_details.intellectual}%` }}
+                      />
+                    </div>
+                    <p className="text-sm text-gray-600">{compatibility_details.intellectual}%</p>
+                    <p className="text-sm text-gray-500 mt-1">Indicates alignment in thinking and communication styles</p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Lifestyle</h3>
+                    <div className="h-2 bg-gray-200 rounded-full mb-1">
+                      <div
+                        className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                        style={{ width: `${compatibility_details.lifestyle}%` }}
+                      />
+                    </div>
+                    <p className="text-sm text-gray-600">{compatibility_details.lifestyle}%</p>
+                    <p className="text-sm text-gray-500 mt-1">Shows compatibility in daily routines and life goals</p>
+                  </div>
                 </div>
               </motion.section>
 

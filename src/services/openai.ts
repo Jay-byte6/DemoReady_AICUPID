@@ -368,17 +368,20 @@ function transformAIResponseToPersonaAnalysis(aiResponse: any): PersonaAnalysis 
 }
 
 function transformAIResponseToCompatibilityScore(aiResponse: any): CompatibilityScore {
-  return {
-    overall: aiResponse.overall_score || 0,
-    emotional: aiResponse.emotional_score || 0,
-    intellectual: aiResponse.intellectual_score || 0,
-    lifestyle: aiResponse.lifestyle_score || 0,
+  console.log('Raw AI response:', aiResponse);
+  const score = {
+    overall: Math.round(Number(aiResponse.overall_score)) || 0,
+    emotional: Math.round(Number(aiResponse.emotional_score)) || 0,
+    intellectual: Math.round(Number(aiResponse.intellectual_score)) || 0,
+    lifestyle: Math.round(Number(aiResponse.lifestyle_score)) || 0,
     summary: aiResponse.summary || '',
     strengths: aiResponse.strengths || [],
     challenges: aiResponse.challenges || [],
     tips: aiResponse.tips || [],
     long_term_prediction: aiResponse.long_term_prediction || ''
   };
+  console.log('Transformed compatibility score:', score);
+  return score;
 }
 
 function transformAspect(aspect: any): PersonaAspect {

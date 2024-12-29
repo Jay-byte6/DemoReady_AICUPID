@@ -1,196 +1,248 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Eye, EyeOff } from 'lucide-react';
-import { UserProfile } from '../../types';
-import profileService from '../../services/supabaseService';
+import { profileService } from '../../services/supabaseService';
+import { toast } from 'react-hot-toast';
 
-interface VisibilitySettingsProps {
-  userProfile: UserProfile;
-  onUpdate: (updatedProfile: UserProfile) => void;
+interface VisibilitySettings {
+  smart_matching_visible: boolean;
+  profile_image_visible: boolean;
+  occupation_visible: boolean;
+  contact_visible: boolean;
+  master_visibility: boolean;
 }
 
-const VisibilitySettings: React.FC<VisibilitySettingsProps> = ({ userProfile, onUpdate }) => {
-  const [settings, setSettings] = useState(userProfile.visibility_settings || {
+interface VisibilitySettingsProps {
+  userId: string;
+}
+
+const VisibilitySettings: React.FC<VisibilitySettingsProps> = ({ userId }) => {
+  const [settings, setSettings] = useState<VisibilitySettings>({
     smart_matching_visible: true,
     profile_image_visible: true,
     occupation_visible: true,
     contact_visible: true,
-    master_visibility: true,
+    master_visibility: true
   });
-  const [isSaving, setIsSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // Update settings when master visibility changes
   useEffect(() => {
-    if (!settings.master_visibility) {
-      setSettings(prev => ({
-        ...prev,
-        smart_matching_visible: false,
-        profile_image_visible: false,
-        occupation_visible: false,
-        contact_visible: false,
-      }));
-    }
-  }, [settings.master_visibility]);
+    loadSettings();
+  }, [userId]);
 
-  const handleToggle = (key: keyof typeof settings) => {
-    setSettings(prev => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
+  const loadSettings = async () => {
+    try {
+      setLoading(true);
+      const profile = await profileService.getUserProfile(userId);
+      if (profile?.visibility_settings) {
+        setSettings(profile.visibility_settings);
+      }
+    } catch (err: any) {
+      console.error('Error loading visibility settings:', err);
+      toast.error('Failed to load visibility settings');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSave = async () => {
+  const handleToggle = async (setting: keyof VisibilitySettings) => {
     try {
-      setIsSaving(true);
-      const updatedProfile = await profileService.updateUserProfile(userProfile.user_id, {
-        ...userProfile,
-        visibility_settings: settings,
+      setLoading(true);
+      const newSettings = {
+        ...settings,
+        [setting]: !settings[setting]
+      };
+
+      await profileService.updateUserProfile(userId, {
+        visibility_settings: newSettings
       });
-      onUpdate(updatedProfile);
-    } catch (error) {
-      console.error('Error saving visibility settings:', error);
+
+      setSettings(newSettings);
+      toast.success('Visibility settings updated');
+    } catch (err: any) {
+      console.error('Error updating visibility settings:', err);
+      toast.error('Failed to update visibility settings');
     } finally {
-      setIsSaving(false);
+      setLoading(false);
+    }
+  };
+
+  const toggleMasterVisibility = async () => {
+    try {
+      setLoading(true);
+      const newSettings = {
+        ...settings,
+        master_visibility: !settings.master_visibility
+      };
+
+      await profileService.updateUserProfile(userId, {
+        visibility_settings: newSettings
+      });
+
+      setSettings(newSettings);
+      toast.success('Profile visibility updated');
+    } catch (err: any) {
+      console.error('Error updating master visibility:', err);
+      toast.error('Failed to update profile visibility');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-gray-900">Visibility Settings</h2>
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {isSaving ? 'Saving...' : 'Save Changes'}
-        </button>
-      </div>
-
-      <div className="space-y-6">
-        {/* Master Visibility Toggle */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Lock className="w-5 h-5 text-gray-500" />
-            <div>
-              <div className="font-medium">Master Visibility</div>
-              <div className="text-sm text-gray-500">Control overall profile visibility in smart matching</div>
-            </div>
-          </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Profile Visibility</h3>
+          <p className="text-sm text-gray-600">
+            Control who can see your profile and what information is visible
+          </p>
+        </div>
+        <div className="flex items-center">
           <button
-            onClick={() => handleToggle('master_visibility')}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              settings.master_visibility ? 'bg-indigo-600' : 'bg-gray-200'
-            }`}
+            onClick={toggleMasterVisibility}
+            disabled={loading}
+            className={`
+              relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
+              transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+              ${settings.master_visibility ? 'bg-primary' : 'bg-gray-200'}
+            `}
           >
             <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                settings.master_visibility ? 'translate-x-6' : 'translate-x-1'
-              }`}
+              className={`
+                pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0
+                transition duration-200 ease-in-out
+                ${settings.master_visibility ? 'translate-x-5' : 'translate-x-0'}
+              `}
+            />
+          </button>
+          <span className="ml-3 text-sm font-medium">
+            {settings.master_visibility ? 'Visible' : 'Hidden'}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-medium">Smart Matching</h4>
+            <p className="text-sm text-gray-600">
+              Allow others to find you through smart matching
+            </p>
+          </div>
+          <button
+            onClick={() => handleToggle('smart_matching_visible')}
+            disabled={loading || !settings.master_visibility}
+            className={`
+              relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
+              transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+              ${
+                settings.smart_matching_visible && settings.master_visibility
+                  ? 'bg-primary'
+                  : 'bg-gray-200'
+              }
+              ${!settings.master_visibility ? 'opacity-50 cursor-not-allowed' : ''}
+            `}
+          >
+            <span
+              className={`
+                pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0
+                transition duration-200 ease-in-out
+                ${settings.smart_matching_visible ? 'translate-x-5' : 'translate-x-0'}
+              `}
             />
           </button>
         </div>
 
-        {/* Individual Settings */}
-        <div className="space-y-4 pl-4 border-l-2 border-gray-100">
-          {/* Smart Matching Visibility */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              {settings.smart_matching_visible ? (
-                <Eye className="w-5 h-5 text-gray-500" />
-              ) : (
-                <EyeOff className="w-5 h-5 text-gray-500" />
-              )}
-              <div className="font-medium">Smart Matching Visibility</div>
-            </div>
-            <button
-              onClick={() => handleToggle('smart_matching_visible')}
-              disabled={!settings.master_visibility}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                settings.smart_matching_visible && settings.master_visibility ? 'bg-indigo-600' : 'bg-gray-200'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  settings.smart_matching_visible ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-medium">Profile Picture</h4>
+            <p className="text-sm text-gray-600">
+              Show your profile picture to other users
+            </p>
           </div>
+          <button
+            onClick={() => handleToggle('profile_image_visible')}
+            disabled={loading || !settings.master_visibility}
+            className={`
+              relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
+              transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+              ${
+                settings.profile_image_visible && settings.master_visibility
+                  ? 'bg-primary'
+                  : 'bg-gray-200'
+              }
+              ${!settings.master_visibility ? 'opacity-50 cursor-not-allowed' : ''}
+            `}
+          >
+            <span
+              className={`
+                pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0
+                transition duration-200 ease-in-out
+                ${settings.profile_image_visible ? 'translate-x-5' : 'translate-x-0'}
+              `}
+            />
+          </button>
+        </div>
 
-          {/* Profile Picture Visibility */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              {settings.profile_image_visible ? (
-                <Eye className="w-5 h-5 text-gray-500" />
-              ) : (
-                <EyeOff className="w-5 h-5 text-gray-500" />
-              )}
-              <div className="font-medium">Profile Picture Visibility</div>
-            </div>
-            <button
-              onClick={() => handleToggle('profile_image_visible')}
-              disabled={!settings.master_visibility}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                settings.profile_image_visible && settings.master_visibility ? 'bg-indigo-600' : 'bg-gray-200'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  settings.profile_image_visible ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-medium">Occupation</h4>
+            <p className="text-sm text-gray-600">
+              Display your occupation on your profile
+            </p>
           </div>
+          <button
+            onClick={() => handleToggle('occupation_visible')}
+            disabled={loading || !settings.master_visibility}
+            className={`
+              relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
+              transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+              ${
+                settings.occupation_visible && settings.master_visibility
+                  ? 'bg-primary'
+                  : 'bg-gray-200'
+              }
+              ${!settings.master_visibility ? 'opacity-50 cursor-not-allowed' : ''}
+            `}
+          >
+            <span
+              className={`
+                pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0
+                transition duration-200 ease-in-out
+                ${settings.occupation_visible ? 'translate-x-5' : 'translate-x-0'}
+              `}
+            />
+          </button>
+        </div>
 
-          {/* Occupation Visibility */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              {settings.occupation_visible ? (
-                <Eye className="w-5 h-5 text-gray-500" />
-              ) : (
-                <EyeOff className="w-5 h-5 text-gray-500" />
-              )}
-              <div className="font-medium">Occupation Visibility</div>
-            </div>
-            <button
-              onClick={() => handleToggle('occupation_visible')}
-              disabled={!settings.master_visibility}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                settings.occupation_visible && settings.master_visibility ? 'bg-indigo-600' : 'bg-gray-200'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  settings.occupation_visible ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-medium">Contact Information</h4>
+            <p className="text-sm text-gray-600">
+              Allow others to see your contact information
+            </p>
           </div>
-
-          {/* Contact Information Visibility */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              {settings.contact_visible ? (
-                <Eye className="w-5 h-5 text-gray-500" />
-              ) : (
-                <EyeOff className="w-5 h-5 text-gray-500" />
-              )}
-              <div className="font-medium">Contact Information Visibility</div>
-            </div>
-            <button
-              onClick={() => handleToggle('contact_visible')}
-              disabled={!settings.master_visibility}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                settings.contact_visible && settings.master_visibility ? 'bg-indigo-600' : 'bg-gray-200'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  settings.contact_visible ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
+          <button
+            onClick={() => handleToggle('contact_visible')}
+            disabled={loading || !settings.master_visibility}
+            className={`
+              relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
+              transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
+              ${
+                settings.contact_visible && settings.master_visibility
+                  ? 'bg-primary'
+                  : 'bg-gray-200'
+              }
+              ${!settings.master_visibility ? 'opacity-50 cursor-not-allowed' : ''}
+            `}
+          >
+            <span
+              className={`
+                pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0
+                transition duration-200 ease-in-out
+                ${settings.contact_visible ? 'translate-x-5' : 'translate-x-0'}
+              `}
+            />
+          </button>
         </div>
       </div>
     </div>
