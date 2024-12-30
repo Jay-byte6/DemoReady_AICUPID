@@ -16,13 +16,18 @@ const ProfileScanner: React.FC<ProfileScannerProps> = ({ onScanComplete }) => {
         user_id: 'user-id',
         fullname: 'John Doe',
         age: 28,
+        gender: 'male',
         location: 'New York',
         occupation: 'Software Engineer',
+        relationship_history: 'Single',
+        lifestyle: 'Active',
         profile_image: null,
+        cupid_id: 'CUPID-123',
         interests: ['Technology', 'Travel']
       },
       compatibility_score: 85,
       compatibility_details: {
+        summary: 'Strong overall compatibility with shared interests and values.',
         strengths: ['Similar interests', 'Compatible life goals'],
         challenges: ['Different communication styles'],
         tips: ['Practice active listening'],

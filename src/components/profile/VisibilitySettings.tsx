@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { profileService } from '../../services/supabaseService';
 import { toast } from 'react-hot-toast';
+import { UserProfile } from '../../types';
 
 interface VisibilitySettings {
   smart_matching_visible: boolean;
@@ -12,9 +13,11 @@ interface VisibilitySettings {
 
 interface VisibilitySettingsProps {
   userId: string;
+  userProfile: UserProfile;
+  onUpdate: (updatedProfile: UserProfile) => void;
 }
 
-const VisibilitySettings: React.FC<VisibilitySettingsProps> = ({ userId }) => {
+const VisibilitySettings: React.FC<VisibilitySettingsProps> = ({ userId, userProfile, onUpdate }) => {
   const [settings, setSettings] = useState<VisibilitySettings>({
     smart_matching_visible: true,
     profile_image_visible: true,

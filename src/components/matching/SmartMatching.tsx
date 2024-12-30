@@ -75,6 +75,7 @@ const SmartMatching: React.FC = () => {
                   ...match,
                   compatibility_score: compatibilityScore.overall,
                   compatibility_details: {
+                    summary: compatibilityScore.summary,
                     strengths: compatibilityScore.strengths,
                     challenges: compatibilityScore.challenges,
                     tips: compatibilityScore.tips,

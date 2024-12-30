@@ -17,6 +17,9 @@ const Onboarding: React.FC = () => {
       }
 
       try {
+        setLoading(true);
+        setError('');
+
         // Check if profile already exists
         const { data: existingProfile } = await supabase
           .from('user_profiles')
@@ -30,20 +33,45 @@ const Onboarding: React.FC = () => {
           return;
         }
 
-        // Create new profile
+        // Create new profile with minimal data
         const { error: profileError } = await supabase
           .from('user_profiles')
           .insert([{
             user_id: user.id,
-            email: user.email,
+            cupid_id: `CUPID${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+            fullname: '',
+            age: 0,
+            gender: '',
+            location: '',
+            occupation: '',
+            relationship_history: '',
+            lifestyle: '',
+            profile_image: null,
+            interests: [],
+            notification_preferences: {
+              new_match: true,
+              new_message: true,
+              profile_view: true,
+              email_notifications: true
+            },
+            visibility_settings: {
+              smart_matching_visible: true,
+              profile_image_visible: true,
+              occupation_visible: true,
+              contact_visible: true,
+              master_visibility: true
+            },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           }]);
 
         if (profileError) {
+          console.error('Error creating profile:', profileError);
           throw profileError;
         }
 
-        // Redirect to personality analysis to complete profile
-        navigate('/personality-analysis');
+        // Redirect to registration to complete profile
+        navigate('/registration');
       } catch (err: any) {
         console.error('Error in onboarding:', err);
         setError(err.message || 'Failed to create profile');

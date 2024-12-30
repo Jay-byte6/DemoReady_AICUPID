@@ -56,18 +56,49 @@ export const profileService = {
 
   async updateUserProfile(userId: string, profile: Partial<UserProfile>): Promise<UserProfile | null> {
     try {
-      const { data, error } = await supabase
+      // First check if profile exists
+      const { data: existingProfile } = await supabase
         .from('user_profiles')
-        .update(profile)
+        .select('*')
         .eq('user_id', userId)
-        .select()
         .single();
 
-      if (error) throw error;
-      return data;
+      let result;
+      if (existingProfile) {
+        // Update existing profile
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .update({
+            ...profile,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        result = data;
+      } else {
+        // Create new profile
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .insert([{
+            user_id: userId,
+            ...profile,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        result = data;
+      }
+
+      return result;
     } catch (error) {
       console.error('Error updating user profile:', error);
-      return null;
+      throw error;
     }
   },
 
@@ -323,49 +354,41 @@ export const profileService = {
 
   async getPersonaAnalysis(userId: string): Promise<PersonaAnalysis | null> {
     try {
-      // First check if user profile exists
-      const profile = await this.getUserProfile(userId);
-      if (!profile) {
-        console.warn('User profile not found:', userId);
-        return null;
-      }
-
-      // Get all persona aspects
-      const { data: aspects, error } = await supabase
-        .from('persona_aspects')
+      const { data, error } = await supabase
+        .from('personality_analysis')
         .select('*')
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .single();
 
-      if (error) {
-        console.error('Error fetching persona aspects:', error);
-        return null;
-      }
+      if (error) throw error;
+      
+      if (!data) return null;
 
-      if (!aspects || aspects.length === 0) {
-        console.log('No existing analysis found, generating new one...');
-        return await this.generateAndStorePersonaAnalysis(userId);
-      }
+      // Get positive and negative personas from separate tables
+      const [positivePersona, negativePersona] = await Promise.all([
+        this.getPositivePersona(userId),
+        this.getNegativePersona(userId)
+      ]);
 
-      // Transform aspects into PersonaAnalysis structure
-      const positiveAspects = aspects.filter(a => a.is_positive);
-      const negativeAspects = aspects.filter(a => !a.is_positive);
-
-      const transformedAnalysis: PersonaAnalysis = {
-        positivePersona: {
-          personality_traits: this.transformStoredAspect(positiveAspects.find(a => a.aspect_type === 'personality_traits')),
-          core_values: this.transformStoredAspect(positiveAspects.find(a => a.aspect_type === 'core_values')),
-          behavioral_traits: this.transformStoredAspect(positiveAspects.find(a => a.aspect_type === 'behavioral_traits')),
-          hobbies_interests: this.transformStoredAspect(positiveAspects.find(a => a.aspect_type === 'hobbies_interests'))
+      return {
+        positivePersona: positivePersona || {
+          personality_traits: this.createDefaultPersonaAspect(),
+          core_values: this.createDefaultPersonaAspect(),
+          behavioral_traits: this.createDefaultPersonaAspect(),
+          hobbies_interests: this.createDefaultPersonaAspect()
         },
-        negativePersona: {
-          emotional_aspects: this.transformStoredAspect(negativeAspects.find(a => a.aspect_type === 'emotional_aspects')),
-          social_aspects: this.transformStoredAspect(negativeAspects.find(a => a.aspect_type === 'social_aspects')),
-          lifestyle_aspects: this.transformStoredAspect(negativeAspects.find(a => a.aspect_type === 'lifestyle_aspects')),
-          relational_aspects: this.transformStoredAspect(negativeAspects.find(a => a.aspect_type === 'relational_aspects'))
-        }
+        negativePersona: negativePersona || {
+          emotional_aspects: this.createDefaultPersonaAspect(),
+          social_aspects: this.createDefaultPersonaAspect(),
+          lifestyle_aspects: this.createDefaultPersonaAspect(),
+          relational_aspects: this.createDefaultPersonaAspect()
+        },
+        preferences: data.preferences,
+        psychological_profile: data.psychological_profile,
+        relationship_goals: data.relationship_goals,
+        behavioral_insights: data.behavioral_insights,
+        dealbreakers: data.dealbreakers
       };
-
-      return transformedAnalysis;
     } catch (error) {
       console.error('Error getting persona analysis:', error);
       return null;
@@ -523,8 +546,11 @@ export const profileService = {
           cupid_id,
           fullname,
           age,
+          gender,
           location,
           occupation,
+          relationship_history,
+          lifestyle,
           profile_image,
           visibility_settings
         `)
@@ -552,10 +578,6 @@ export const profileService = {
 
       // If we have stored matches and they're not too old, use them
       if (storedMatches && storedMatches.length > 0) {
-        const oldestMatch = storedMatches.reduce((oldest, current) => {
-          return new Date(current.last_updated) < new Date(oldest.last_updated) ? current : oldest;
-        }, storedMatches[0]);
-
         // Transform stored matches into SmartMatch format
         const transformedMatches: SmartMatch[] = storedMatches
           .map(match => {
@@ -563,29 +585,33 @@ export const profileService = {
             if (!profile) return null;
 
             const smartMatch: SmartMatch = {
+              id: match.id,
+              user_id: match.user_id,
               profile: {
                 id: profile.id,
                 user_id: profile.user_id,
                 cupid_id: profile.cupid_id,
                 fullname: profile.fullname,
                 age: profile.age,
+                gender: profile.gender,
                 location: profile.location,
                 occupation: profile.occupation,
+                relationship_history: profile.relationship_history,
+                lifestyle: profile.lifestyle,
                 profile_image: profile.profile_image,
-                gender: '',
-                relationship_history: '',
-                lifestyle: ''
+                interests: []
               },
               compatibility_score: match.compatibility_score,
               compatibility_details: {
-                summary: match.summary,
+                summary: match.summary || '',
                 strengths: match.strengths || [],
                 challenges: match.challenges || [],
                 tips: match.tips || [],
                 long_term_prediction: match.long_term_prediction || ''
               },
               is_favorite: favoriteIds.has(profile.user_id),
-              last_updated: match.last_updated
+              last_updated: match.last_updated,
+              created_at: match.created_at
             };
             return smartMatch;
           })
@@ -602,38 +628,22 @@ export const profileService = {
           const compatibilityScore = await this.getCompatibilityAnalysis(userId, profile.user_id);
           if (!compatibilityScore) return null;
 
-          // Store the match in Supabase
-          const { error: insertError } = await supabase
-            .from('smart_matches')
-            .upsert({
-              user_id: userId,
-              target_user_id: profile.user_id,
-              compatibility_score: compatibilityScore.overall,
-              summary: compatibilityScore.summary,
-              strengths: compatibilityScore.strengths,
-              challenges: compatibilityScore.challenges,
-              tips: compatibilityScore.tips,
-              long_term_prediction: compatibilityScore.long_term_prediction,
-              last_updated: new Date().toISOString()
-            });
-
-          if (insertError) {
-            console.error('Error storing match:', insertError);
-          }
-
           const match: SmartMatch = {
+            id: `${userId}-${profile.user_id}`,
+            user_id: userId,
             profile: {
               id: profile.id,
               user_id: profile.user_id,
               cupid_id: profile.cupid_id,
               fullname: profile.fullname,
               age: profile.age,
+              gender: profile.gender,
               location: profile.location,
               occupation: profile.occupation,
+              relationship_history: profile.relationship_history,
+              lifestyle: profile.lifestyle,
               profile_image: profile.profile_image,
-              gender: '',
-              relationship_history: '',
-              lifestyle: ''
+              interests: []
             },
             compatibility_score: compatibilityScore.overall,
             compatibility_details: {
@@ -644,7 +654,8 @@ export const profileService = {
               long_term_prediction: compatibilityScore.long_term_prediction
             },
             is_favorite: favoriteIds.has(profile.user_id),
-            last_updated: new Date().toISOString()
+            last_updated: new Date().toISOString(),
+            created_at: new Date().toISOString()
           };
           return match;
         } catch (error) {
@@ -1003,44 +1014,25 @@ export const profileService = {
     }
   },
 
-  async savePersonalityAnalysis(userId: string, data: any): Promise<boolean> {
+  async savePersonalityAnalysis(userId: string, data: Partial<PersonaAnalysis>) {
     try {
-      console.log('Saving personality analysis for user:', userId);
-      
-      // First get existing personality data
-      const { data: existingData } = await supabase
-        .from('user_profiles')
-        .select('personality_data')
-        .eq('user_id', userId)
-        .single();
-
-      // Update the profile with personality data
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .update({
-          personality_data: data,
+      const { error } = await supabase
+        .from('personality_analysis')
+        .upsert({
+          user_id: userId,
+          preferences: data.preferences,
+          psychological_profile: data.psychological_profile,
+          relationship_goals: data.relationship_goals,
+          behavioral_insights: data.behavioral_insights,
+          dealbreakers: data.dealbreakers,
           updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userId);
+        });
 
-      if (profileError) {
-        console.error('Error saving personality data to profile:', profileError);
-        return false;
-      }
-
-      // Check if personality data changed significantly
-      const personalityChanged = JSON.stringify(existingData?.personality_data) !== JSON.stringify(data);
-
-      if (personalityChanged) {
-        // Trigger persona generation in the background
-        this.generateAndStorePersonaAnalysis(userId, true, 'PERSONALITY_TEST')
-          .catch(error => console.error('Error generating persona after personality test:', error));
-      }
-
+      if (error) throw error;
       return true;
     } catch (error) {
       console.error('Error saving personality analysis:', error);
-      return false;
+      throw error;
     }
   },
 
@@ -1130,6 +1122,113 @@ export const profileService = {
       console.error('Error getting user profile by CUPID ID:', error);
       return null;
     }
+  },
+
+  async savePositivePersona(userId: string, persona: PositivePersona): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('persona_aspects')
+        .upsert([
+          {
+            user_id: userId,
+            aspect_type: 'personality_traits',
+            ...persona.personality_traits,
+            is_positive: true
+          },
+          {
+            user_id: userId,
+            aspect_type: 'core_values',
+            ...persona.core_values,
+            is_positive: true
+          },
+          {
+            user_id: userId,
+            aspect_type: 'behavioral_traits',
+            ...persona.behavioral_traits,
+            is_positive: true
+          },
+          {
+            user_id: userId,
+            aspect_type: 'hobbies_interests',
+            ...persona.hobbies_interests,
+            is_positive: true
+          }
+        ]);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error saving positive persona:', error);
+      return false;
+    }
+  },
+
+  async saveNegativePersona(userId: string, persona: NegativePersona): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('persona_aspects')
+        .upsert([
+          {
+            user_id: userId,
+            aspect_type: 'emotional_aspects',
+            ...persona.emotional_aspects,
+            is_positive: false
+          },
+          {
+            user_id: userId,
+            aspect_type: 'social_aspects',
+            ...persona.social_aspects,
+            is_positive: false
+          },
+          {
+            user_id: userId,
+            aspect_type: 'lifestyle_aspects',
+            ...persona.lifestyle_aspects,
+            is_positive: false
+          },
+          {
+            user_id: userId,
+            aspect_type: 'relational_aspects',
+            ...persona.relational_aspects,
+            is_positive: false
+          }
+        ]);
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error saving negative persona:', error);
+      return false;
+    }
+  },
+
+  getVisibleProfileData(profile: UserProfile): UserProfile {
+    if (!profile.visibility_settings) {
+      return profile;
+    }
+
+    const visibleProfile = { ...profile };
+    const settings = profile.visibility_settings;
+
+    if (!settings.master_visibility) {
+      visibleProfile.profile_image = null;
+      visibleProfile.occupation = '';
+      return visibleProfile;
+    }
+
+    if (!settings.profile_image_visible) {
+      visibleProfile.profile_image = null;
+    }
+
+    if (!settings.occupation_visible) {
+      visibleProfile.occupation = '';
+    }
+
+    return visibleProfile;
+  },
+
+  async getPersonalityAnalysis(userId: string): Promise<PersonaAnalysis | null> {
+    return this.getPersonaAnalysis(userId);
   }
 };
 

@@ -20,14 +20,14 @@ import {
 } from 'lucide-react';
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
 import 'react-circular-progressbar/dist/styles.css';
-import { SmartMatchProfile, CompatibilityScore } from '../../types';
+import { SmartMatchProfile, CompatibilityScore, UserProfile } from '../../types';
 import DetailedInsightsView from './DetailedInsightsView';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   onBack: () => void;
-  profile: SmartMatchProfile;
+  profile: SmartMatchProfile | UserProfile;
   compatibility_details: CompatibilityScore;
 }
 
@@ -126,7 +126,9 @@ const DetailedCompatibilityView: React.FC<Props> = ({
             </div>
             <div>
               <h2 className="text-3xl font-bold text-gray-900">{profile.fullname}</h2>
-              <p className="text-gray-600 mt-1">CUPID ID: {profile.cupid_id}</p>
+              <p className="text-gray-600 mt-1">
+                CUPID ID: {('cupid_id' in profile) ? profile.cupid_id : ''}
+              </p>
               <div className="flex gap-4 mt-2">
                 {profile.age && <span className="text-sm text-gray-600">{profile.age} years</span>}
                 {profile.location && <span className="text-sm text-gray-600">{profile.location}</span>}

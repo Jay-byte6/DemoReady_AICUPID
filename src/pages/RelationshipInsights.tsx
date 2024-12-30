@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Heart, MessageCircle, History, Search, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { profileService } from '../services/supabaseService';
+import { UserProfile } from '../types';
 
 type TabType = 'favorites' | 'chats' | 'compatibility' | 'search';
 
@@ -10,9 +11,20 @@ interface InsightItem {
   fullname: string;
   timestamp: string;
   type: TabType;
-  details: any;
-  profile?: any;
-  compatibility_insights?: any;
+  details: {
+    compatibility_score: number;
+    last_interaction?: string;
+    message_count?: number;
+    compatibility_insights?: string[];
+  };
+  profile?: UserProfile;
+  compatibility_insights?: {
+    compatibility_score: number;
+    strengths: string[];
+    challenges: string[];
+    tips: string[];
+    long_term_prediction: string;
+  };
 }
 
 const RelationshipInsights = () => {
@@ -39,16 +51,22 @@ const RelationshipInsights = () => {
           // Load actual favorite profiles
           const favorites = await profileService.getFavoriteProfiles(user.id);
           const formattedFavorites = favorites.map(favorite => ({
-            id: favorite.id,
+            id: favorite.id || '',
             fullname: favorite.profile?.fullname || 'Anonymous',
-            timestamp: favorite.created_at,
+            timestamp: favorite.last_updated || new Date().toISOString(),
             type: 'favorites' as TabType,
             details: {
-              compatibility_score: favorite.compatibility_insights?.compatibility_score || 0,
-              compatibility_insights: favorite.compatibility_insights?.strengths || []
+              compatibility_score: favorite.compatibility_score || 0,
+              compatibility_insights: favorite.compatibility_details?.strengths || []
             },
             profile: favorite.profile,
-            compatibility_insights: favorite.compatibility_insights
+            compatibility_insights: {
+              compatibility_score: favorite.compatibility_score || 0,
+              strengths: favorite.compatibility_details?.strengths || [],
+              challenges: favorite.compatibility_details?.challenges || [],
+              tips: favorite.compatibility_details?.tips || [],
+              long_term_prediction: favorite.compatibility_details?.long_term_prediction || ''
+            }
           }));
           setInsights(formattedFavorites);
         } else {
@@ -81,7 +99,8 @@ const RelationshipInsights = () => {
     loadInsights();
   }, [user, activeTab]);
 
-  const formatDate = (date: string) => {
+  const formatDate = (date: string | undefined) => {
+    if (!date) return '';
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -89,7 +108,8 @@ const RelationshipInsights = () => {
     });
   };
 
-  const formatTime = (date: string) => {
+  const formatTime = (date: string | undefined) => {
+    if (!date) return '';
     return new Date(date).toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit'
@@ -197,7 +217,7 @@ const RelationshipInsights = () => {
                   Compatibility Insights
                 </h4>
                 <ul className="space-y-2">
-                  {(item.compatibility_insights?.strengths || item.details.compatibility_insights).map((insight: string, index: number) => (
+                  {(item.compatibility_insights?.strengths || item.details.compatibility_insights || []).map((insight: string, index: number) => (
                     <li
                       key={index}
                       className="flex items-center text-sm text-gray-600"

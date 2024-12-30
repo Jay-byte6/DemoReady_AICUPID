@@ -75,7 +75,10 @@ const PublicTest: React.FC = () => {
     setError(null);
 
     try {
-      const analysis = await generatePersonaAnalysis(formData);
+      const analysis = await generatePersonaAnalysis({
+        user1: formData,
+        user2: formData
+      });
       setResult(analysis);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

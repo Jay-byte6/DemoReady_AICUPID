@@ -1,4 +1,5 @@
 export interface CompatibilityDetails {
+  summary: string;
   strengths: string[];
   challenges: string[];
   tips: string[];
@@ -106,6 +107,13 @@ export interface UserProfile {
   cupid_id: string;
   created_at?: string;
   updated_at?: string;
+  interests?: string[];
+  notification_preferences?: {
+    new_match: boolean;
+    new_message: boolean;
+    profile_view: boolean;
+    email_notifications: boolean;
+  };
   visibility_settings?: {
     smart_matching_visible: boolean;
     profile_image_visible: boolean;
@@ -152,6 +160,11 @@ export interface NegativePersona {
 export interface PersonaAnalysis {
   positivePersona: PositivePersona;
   negativePersona: NegativePersona;
+  preferences?: Record<string, any>;
+  psychological_profile?: Record<string, any>;
+  relationship_goals?: Record<string, any>;
+  behavioral_insights?: Record<string, any>;
+  dealbreakers?: Record<string, any>;
 }
 
 export interface MatchRequest {
@@ -222,46 +235,29 @@ export interface RelationshipInsight {
   updated_at: string;
 }
 
-export interface SmartMatchProfile {
+export interface SmartMatchProfile extends UserProfile {
   id: string;
-  user_id: string;
-  cupid_id?: string;
-  fullname: string;
-  age?: number;
-  gender?: string;
-  location?: string;
-  occupation?: string;
-  relationship_history?: string;
-  lifestyle?: string;
-  profile_image?: string | null;
-  interests?: string[];
-  visibility_settings?: {
-    smart_matching_visible?: boolean;
-    profile_image_visible?: boolean;
-    occupation_visible?: boolean;
-    contact_visible?: boolean;
-    master_visibility?: boolean;
-  };
+  age: number;
+  gender: string;
+  location: string;
+  occupation: string;
+  relationship_history: string;
+  lifestyle: string;
 }
 
 export interface SmartMatch {
-  id?: string;
-  user_id?: string;
+  id: string;
+  user_id: string;
   profile: UserProfile;
   compatibility_score: number;
-  compatibility_details: {
-    summary: string;
-    strengths: string[];
-    challenges: string[];
-    tips: string[];
-    long_term_prediction: string;
-  };
-  request_status?: {
-    persona_view: string;
-    chat: string;
-  };
+  compatibility_details: CompatibilityDetails;
   is_favorite?: boolean;
-  last_updated?: string;
+  last_updated: string;
+  created_at: string;
+  request_status?: {
+    type: 'PERSONA_VIEW' | 'CHAT';
+    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
+  };
 }
 
 export interface Message {

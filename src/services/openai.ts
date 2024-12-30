@@ -393,6 +393,12 @@ function transformAspect(aspect: any): PersonaAspect {
   };
 }
 
+export const generateAIPersona = generateDetailedPersonaAnalysis;
+export const generateNegativePersona = async (profile: UserProfile): Promise<PersonaAnalysis | null> => {
+  return generateDetailedPersonaAnalysis(profile, { messages: [], aiChat: [] });
+};
+export const analyzeCompatibility = analyzeDetailedCompatibility;
+
 export default {
   generatePersonaAnalysis,
   generateDetailedPersonaAnalysis,

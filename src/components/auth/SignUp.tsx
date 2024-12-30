@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import ErrorAlert from '../ErrorAlert';
+import { profileService } from '../../services/supabaseService';
 
 const SignUp = () => {
   const navigate = useNavigate();
@@ -23,17 +24,31 @@ const SignUp = () => {
       setIsLoading(true);
       setError(null);
 
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      // Only handle auth signup
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/registration`
+        }
       });
 
-      if (signUpError) throw signUpError;
-
-      if (data?.user) {
-        // Redirect to registration page to complete profile
-        navigate('/registration');
+      if (signUpError) {
+        console.error('Signup error:', signUpError);
+        throw signUpError;
       }
+
+      if (!authData?.user) {
+        throw new Error('No user data returned from signup');
+      }
+
+      // Redirect to registration - profile will be created there
+      navigate('/registration', { 
+        state: { 
+          userId: authData.user.id,
+          email: email
+        } 
+      });
     } catch (err: any) {
       console.error('SignUp error:', err);
       setError(err.message || 'An error occurred during sign up');

@@ -47,6 +47,7 @@ const PersonalityAnalysis = () => {
     behavioralInsights: {},
     dealbreakers: {}
   });
+  const [isProfileComplete, setIsProfileComplete] = useState(false);
 
   // Load existing data when component mounts
   useEffect(() => {
@@ -67,7 +68,7 @@ const PersonalityAnalysis = () => {
         }
 
         // Load personality analysis
-        const analysis = await profileService.getPersonalityAnalysis(user.id);
+        const analysis = await profileService.getPersonaAnalysis(user.id);
         if (analysis) {
           setProfile(prev => ({
             ...prev,
@@ -77,6 +78,14 @@ const PersonalityAnalysis = () => {
             behavioralInsights: analysis.behavioral_insights || {},
             dealbreakers: analysis.dealbreakers || {}
           }));
+
+          // Check if all sections are complete
+          const allSections = ['preferences', 'psychological_profile', 'relationship_goals', 'behavioral_insights', 'dealbreakers'] as const;
+          const isComplete = allSections.every(section => {
+            const sectionData = analysis[section];
+            return sectionData && Object.keys(sectionData).length > 0;
+          }) && Object.keys(userProfile || {}).length > 0;
+          setIsProfileComplete(isComplete);
         }
       } catch (err: any) {
         console.error('Error loading data:', err);
@@ -208,12 +217,15 @@ const PersonalityAnalysis = () => {
       }
 
       console.log('All sections saved successfully');
+      setIsProfileComplete(true);
       
       // Generate AI personas
       await profileService.savePersonalityAnalysis(user.id, {
-        ...profile,
-        user_id: user.id,
-        updated_at: new Date().toISOString()
+        preferences: profile.preferences,
+        psychological_profile: profile.psychologicalProfile,
+        relationship_goals: profile.relationshipGoals,
+        behavioral_insights: profile.behavioralInsights,
+        dealbreakers: profile.dealbreakers,
       });
 
       // Navigate to smart matching
@@ -255,7 +267,16 @@ const PersonalityAnalysis = () => {
   };
 
   const handleStepClick = async (stepNumber: number) => {
-    // Don't allow clicking future steps
+    // Allow direct navigation if profile is complete
+    if (isProfileComplete) {
+      setCurrentStep(stepNumber);
+      setCurrentSection(steps[stepNumber - 1].key as keyof ProfileSections);
+      setError(null);
+      window.scrollTo(0, 0);
+      return;
+    }
+
+    // Don't allow clicking future steps if profile is incomplete
     if (stepNumber > currentStep) return;
 
     // Save current section before switching

@@ -10,6 +10,7 @@ interface CompatibilityCheckModalProps {
   isOpen: boolean;
   onClose: () => void;
   userId: string;
+  matchId?: string;
 }
 
 const CompatibilityCheckModal: React.FC<CompatibilityCheckModalProps> = ({
