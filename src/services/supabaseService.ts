@@ -5,6 +5,7 @@ import {
   PersonaAspect, 
   AspectType, 
   CompatibilityScore,
+  CompatibilityDetails,
   PositivePersona,
   NegativePersona,
   SmartMatch,
@@ -12,6 +13,31 @@ import {
   SmartMatchProfile
 } from '../types';
 import { generateDetailedPersonaAnalysis, analyzeDetailedCompatibility } from './openai';
+
+interface StoredCompatibility {
+  compatibility_score: number;
+  summary: string;
+  strengths: string[];
+  challenges: string[];
+  improvement_tips: string[];
+  long_term_prediction: string;
+  emotional_score: number;
+  intellectual_score: number;
+  lifestyle_score: number;
+  last_generated_at: string;
+}
+
+interface GeneratedCompatibility {
+  overall: number;
+  summary: string;
+  strengths: string[];
+  challenges: string[];
+  tips: string[];
+  long_term_prediction: string;
+  emotional: number;
+  intellectual: number;
+  lifestyle: number;
+}
 
 interface StoredCompatibilityScore {
   overall_score: number;
@@ -40,17 +66,68 @@ interface PersonaVersion {
 export const profileService = {
   async getUserProfile(userId: string): Promise<UserProfile | null> {
     try {
-      const { data, error } = await supabase
+      const { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('user_id', userId)
         .single();
 
       if (error) throw error;
-      return data;
+      
+      // Also get personality analysis data
+      const { data: analysis, error: analysisError } = await supabase
+        .from('personality_analysis')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (analysisError && analysisError.code !== 'PGRST116') throw analysisError;
+
+      return {
+        ...profile,
+        personalInfo: profile || {},
+        preferences: analysis?.preferences || {},
+        psychologicalProfile: analysis?.psychological_profile || {},
+        relationshipGoals: analysis?.relationship_goals || {},
+        behavioralInsights: analysis?.behavioral_insights || {},
+        dealbreakers: analysis?.dealbreakers || {}
+      };
     } catch (error) {
-      console.error('Error getting user profile:', error);
+      console.error('Error fetching user profile:', error);
       return null;
+    }
+  },
+
+  async saveUserProfile(userId: string, profile: ProfileSections): Promise<void> {
+    try {
+      // Save personality analysis data
+      const { error: analysisError } = await supabase
+        .from('personality_analysis')
+        .upsert({
+          user_id: userId,
+          preferences: profile.preferences,
+          psychological_profile: profile.psychologicalProfile,
+          relationship_goals: profile.relationshipGoals,
+          behavioral_insights: profile.behavioralInsights,
+          dealbreakers: profile.dealbreakers,
+          updated_at: new Date().toISOString()
+        });
+
+      if (analysisError) throw analysisError;
+
+      // Save personal info to user_profiles
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .upsert({
+          user_id: userId,
+          ...profile.personalInfo,
+          updated_at: new Date().toISOString()
+        });
+
+      if (profileError) throw profileError;
+    } catch (error) {
+      console.error('Error saving user profile:', error);
+      throw error;
     }
   },
 
@@ -1229,6 +1306,124 @@ export const profileService = {
 
   async getPersonalityAnalysis(userId: string): Promise<PersonaAnalysis | null> {
     return this.getPersonaAnalysis(userId);
+  },
+
+  async findMatchByCupidId(userId: string, cupidId: string): Promise<SmartMatch | null> {
+    try {
+      console.log('Searching for CUPID ID:', cupidId);
+      
+      // First get the target user's profile using their CUPID ID
+      const { data: targetProfile, error: targetError } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('cupid_id', cupidId)
+        .single();
+
+      if (targetError) {
+        console.error('Database error finding target profile:', targetError);
+        return null;
+      }
+
+      if (!targetProfile) {
+        console.warn('No profile found with CUPID ID:', cupidId);
+        return null;
+      }
+
+      console.log('Found profile:', targetProfile);
+
+      // Get stored compatibility data from smart_matches table
+      const { data: matches, error: matchError } = await supabase
+        .from('smart_matches')
+        .select('*')
+        .eq('target_user_id', targetProfile.user_id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (matchError) {
+        console.error('Error fetching smart match:', matchError);
+      }
+
+      const smartMatch = matches?.[0];
+      let compatibilityDetails: CompatibilityDetails;
+      let compatibilityScore: number;
+
+      if (smartMatch) {
+        console.log('Using existing smart match data:', smartMatch);
+        compatibilityDetails = {
+          summary: smartMatch.summary || '',
+          strengths: smartMatch.strengths || [],
+          challenges: smartMatch.challenges || [],
+          tips: smartMatch.tips || [],
+          long_term_prediction: smartMatch.long_term_prediction || '',
+          emotional: smartMatch.emotional_score || 85,
+          intellectual: smartMatch.intellectual_score || 88,
+          lifestyle: smartMatch.lifestyle_score || 82
+        };
+        compatibilityScore = smartMatch.compatibility_score || 85;
+      } else {
+        // Get compatibility from compatibility_insights table as fallback
+        const { data: insights, error: insightError } = await supabase
+          .from('compatibility_insights')
+          .select('*')
+          .eq('target_user_id', targetProfile.user_id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (insightError) {
+          console.error('Error fetching compatibility insights:', insightError);
+        }
+
+        const storedCompatibility = insights?.[0];
+        if (storedCompatibility) {
+          console.log('Using stored compatibility data:', storedCompatibility);
+          compatibilityDetails = {
+            summary: storedCompatibility.summary || '',
+            strengths: storedCompatibility.strengths || [],
+            challenges: storedCompatibility.challenges || [],
+            tips: storedCompatibility.improvement_tips || [],
+            long_term_prediction: storedCompatibility.long_term_prediction || '',
+            emotional: storedCompatibility.emotional_score || 85,
+            intellectual: storedCompatibility.intellectual_score || 88,
+            lifestyle: storedCompatibility.lifestyle_score || 82
+          };
+          compatibilityScore = storedCompatibility.compatibility_score || 85;
+        } else {
+          console.warn('No compatibility data found, returning profile without compatibility');
+          return null;
+        }
+      }
+      
+      // Create the smart match object with compatibility data
+      const matchData: SmartMatch = {
+        id: `${userId}-${targetProfile.user_id}`,
+        user_id: userId,
+        profile: {
+          id: targetProfile.id,
+          user_id: targetProfile.user_id,
+          cupid_id: targetProfile.cupid_id,
+          fullname: targetProfile.fullname || targetProfile.name || '',  // Try fullname first, then fall back to name
+          age: targetProfile.age,
+          location: targetProfile.location,
+          occupation: targetProfile.occupation,
+          education: targetProfile.education,
+          profile_image: targetProfile.profile_image,
+          interests: targetProfile.interests || [],
+          bio: targetProfile.bio || '',
+          personality_traits: targetProfile.personality_traits || []
+        },
+        compatibility_score: compatibilityScore,
+        compatibility_details: compatibilityDetails,
+        is_favorite: false,
+        last_updated: new Date().toISOString()
+      };
+
+      console.log('Returning match data:', matchData);
+      return matchData;
+
+    } catch (error) {
+      console.error('Error in findMatchByCupidId:', error);
+      return null;
+    }
   }
 };
 

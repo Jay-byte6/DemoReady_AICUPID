@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Check } from 'lucide-react';
 import PersonalInfo from '../components/analysis/PersonalInfo';
 import Preferences from '../components/analysis/Preferences';
 import PsychologicalProfile from '../components/analysis/PsychologicalProfile';
@@ -11,14 +11,25 @@ import ErrorAlert from '../components/ErrorAlert';
 import { useAuth } from '../contexts/AuthContext';
 import { profileService } from '../services/supabaseService';
 
-const steps = [
-  { id: 1, name: 'Personal Information', key: 'personalInfo' },
-  { id: 2, name: 'Preferences', key: 'preferences' },
-  { id: 3, name: 'Psychological Profile', key: 'psychologicalProfile' },
-  { id: 4, name: 'Relationship Goals', key: 'relationshipGoals' },
-  { id: 5, name: 'Behavioral Insights', key: 'behavioralInsights' },
-  { id: 6, name: 'Dealbreakers', key: 'dealbreakers' }
+type SectionKey = 'personalInfo' | 'preferences' | 'psychologicalProfile' | 'relationshipGoals' | 'behavioralInsights' | 'dealbreakers';
+
+const ASSESSMENT_ORDER: SectionKey[] = [
+  'personalInfo',
+  'preferences',
+  'psychologicalProfile',
+  'relationshipGoals',
+  'behavioralInsights',
+  'dealbreakers'
 ];
+
+const SECTION_TITLES: Record<SectionKey, string> = {
+  personalInfo: 'Personality Analysis',
+  preferences: 'Preferences',
+  psychologicalProfile: 'Psychological Profile',
+  relationshipGoals: 'Relationship Goals',
+  behavioralInsights: 'Behavioral Insights',
+  dealbreakers: 'Deal Breakers'
+};
 
 interface ProfileSections {
   personalInfo: Record<string, any>;
@@ -27,18 +38,19 @@ interface ProfileSections {
   relationshipGoals: Record<string, any>;
   behavioralInsights: Record<string, any>;
   dealbreakers: Record<string, any>;
-  [key: string]: Record<string, any>;
 }
 
 const PersonalityAnalysis = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentSection, setCurrentSection] = useState<keyof ProfileSections>('personalInfo');
+  const [currentSection, setCurrentSection] = useState<SectionKey>(() => {
+    const selectedSection = localStorage.getItem('selectedSection');
+    return (selectedSection as SectionKey) || 'personalInfo';
+  });
   const [profile, setProfile] = useState<ProfileSections>({
     personalInfo: {},
     preferences: {},
@@ -47,62 +59,76 @@ const PersonalityAnalysis = () => {
     behavioralInsights: {},
     dealbreakers: {}
   });
-  const [isProfileComplete, setIsProfileComplete] = useState(false);
 
-  // Load existing data when component mounts
+  // Get next section in sequence
+  const getNextSection = (currentSection: SectionKey): SectionKey | null => {
+    const currentIndex = ASSESSMENT_ORDER.indexOf(currentSection);
+    return currentIndex < ASSESSMENT_ORDER.length - 1 ? ASSESSMENT_ORDER[currentIndex + 1] : null;
+  };
+
+  // Load user profile data when component mounts
   useEffect(() => {
-    const loadExistingData = async () => {
-      if (!user) return;
-
+    const loadUserProfile = async () => {
+      if (!user?.id) return;
+      
       try {
         setIsLoading(true);
-        setError(null);
-
-        // Load user profile
         const userProfile = await profileService.getUserProfile(user.id);
         if (userProfile) {
+          // Ensure all sections are initialized even if some data is missing
           setProfile(prev => ({
-            ...prev,
-            personalInfo: userProfile
+            personalInfo: userProfile.personalInfo || {},
+            preferences: userProfile.preferences || {},
+            psychologicalProfile: userProfile.psychologicalProfile || {},
+            relationshipGoals: userProfile.relationshipGoals || {},
+            behavioralInsights: userProfile.behavioralInsights || {},
+            dealbreakers: userProfile.dealbreakers || {}
           }));
         }
-
-        // Load personality analysis
-        const analysis = await profileService.getPersonaAnalysis(user.id);
-        if (analysis) {
-          setProfile(prev => ({
-            ...prev,
-            preferences: analysis.preferences || {},
-            psychologicalProfile: analysis.psychological_profile || {},
-            relationshipGoals: analysis.relationship_goals || {},
-            behavioralInsights: analysis.behavioral_insights || {},
-            dealbreakers: analysis.dealbreakers || {}
-          }));
-
-          // Check if all sections are complete
-          const allSections = ['preferences', 'psychological_profile', 'relationship_goals', 'behavioral_insights', 'dealbreakers'] as const;
-          const isComplete = allSections.every(section => {
-            const sectionData = analysis[section];
-            return sectionData && Object.keys(sectionData).length > 0;
-          }) && Object.keys(userProfile || {}).length > 0;
-          setIsProfileComplete(isComplete);
-        }
-      } catch (err: any) {
-        console.error('Error loading data:', err);
-        setError('Failed to load your profile data. Please try again.');
+      } catch (err) {
+        console.error('Error loading profile:', err);
+        setError('Failed to load profile data');
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadExistingData();
-  }, [user]);
+    loadUserProfile();
+  }, [user?.id]);
+
+  const handleBackToAssessments = () => {
+    navigate('/home'); // Navigate to home page instead of landing page
+  };
+
+  const handleSaveAndContinue = async () => {
+    if (!user?.id) return;
+
+    try {
+      setIsSaving(true);
+      await profileService.saveUserProfile(user.id, profile);
+      
+      // Get next section
+      const nextSection = getNextSection(currentSection);
+      if (nextSection) {
+        setCurrentSection(nextSection);
+        localStorage.setItem('selectedSection', nextSection);
+      } else {
+        // If no next section, go back to home
+        navigate('/home');
+      }
+    } catch (err) {
+      console.error('Error saving profile:', err);
+      setError('Failed to save profile data');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const validateCurrentSection = () => {
     const currentSectionData = profile[currentSection];
     
     if (!currentSectionData || Object.keys(currentSectionData).length === 0) {
-      setError(`Please complete all fields in ${currentSection}`);
+      setError(`Please complete all fields in ${SECTION_TITLES[currentSection]}`);
       return false;
     }
     return true;
@@ -116,19 +142,16 @@ const PersonalityAnalysis = () => {
       setError(null);
 
       if (currentSection === 'personalInfo') {
-        // Update user profile
         await profileService.updateUserProfile(user.id, {
           ...profile.personalInfo,
           updated_at: new Date().toISOString()
         });
       } else {
-        // Format the data for personality analysis
         const analysisData: any = {
           user_id: user.id,
           updated_at: new Date().toISOString()
         };
 
-        // Map the section names to database column names
         const sectionMapping: Record<string, string> = {
           psychologicalProfile: 'psychological_profile',
           relationshipGoals: 'relationship_goals',
@@ -138,11 +161,9 @@ const PersonalityAnalysis = () => {
         const dbKey = sectionMapping[currentSection] || currentSection;
         analysisData[dbKey] = profile[currentSection];
 
-        // Save to personality analysis table
         await profileService.savePersonalityAnalysis(user.id, analysisData);
       }
 
-      console.log(`Successfully saved ${currentSection}`);
       return true;
     } catch (err: any) {
       console.error('Error saving section:', err);
@@ -151,23 +172,6 @@ const PersonalityAnalysis = () => {
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleNext = async () => {
-    if (!validateCurrentSection()) return;
-
-    // Save current section data
-    const saved = await saveCurrentSection();
-    if (!saved) return;
-
-    setCurrentStep(currentStep + 1);
-    window.scrollTo(0, 0);
-  };
-
-  const handlePrevious = () => {
-    setError(null);
-    setCurrentStep(currentStep - 1);
-    window.scrollTo(0, 0);
   };
 
   const handleSubmit = async () => {
@@ -185,61 +189,31 @@ const PersonalityAnalysis = () => {
         return;
       }
 
-      // Save final section
+      // Save current section
       const saved = await saveCurrentSection();
       if (!saved) return;
 
-      // Ensure all sections are saved
-      const allSections = ['personalInfo', 'preferences', 'psychologicalProfile', 'relationshipGoals', 'behavioralInsights', 'dealbreakers'];
+      // Get next section
+      const nextSection = getNextSection(currentSection);
       
-      // Log the current state for debugging
-      console.log('Current profile state:', profile);
-
-      // Validate all sections have data
-      const incompleteSections = allSections.filter(section => {
-        const sectionData = profile[section as keyof ProfileSections];
-        return !sectionData || Object.keys(sectionData).length === 0;
-      });
-
-      if (incompleteSections.length > 0) {
-        setError(`Please complete all sections: ${incompleteSections.join(', ')}`);
-        return;
+      if (nextSection) {
+        // If there's a next section, store it and navigate to it
+        localStorage.setItem('selectedSection', nextSection);
+        setCurrentSection(nextSection);
+        window.scrollTo(0, 0);
+      } else {
+        // If this was the last section, go back to home
+        navigate('/');
       }
-
-      // Save all sections one final time
-      for (const section of allSections) {
-        setCurrentSection(section as keyof ProfileSections);
-        const sectionSaved = await saveCurrentSection();
-        if (!sectionSaved) {
-          setError(`Failed to save ${section}. Please try again.`);
-          return;
-        }
-      }
-
-      console.log('All sections saved successfully');
-      setIsProfileComplete(true);
-      
-      // Generate AI personas
-      await profileService.savePersonalityAnalysis(user.id, {
-        preferences: profile.preferences,
-        psychological_profile: profile.psychologicalProfile,
-        relationship_goals: profile.relationshipGoals,
-        behavioral_insights: profile.behavioralInsights,
-        dealbreakers: profile.dealbreakers,
-      });
-
-      // Navigate to smart matching
-      navigate('/smart-matching');
     } catch (error: any) {
       console.error('Submission error:', error);
       setError(error.message || 'Error saving profile. Please try again.');
-      window.scrollTo(0, 0);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const updateFormData = (section: keyof ProfileSections, data: Record<string, any>) => {
+  const updateFormData = (section: SectionKey, data: Record<string, any>) => {
     setProfile(prev => ({
       ...prev,
       [section]: { ...prev[section], ...data }
@@ -247,54 +221,29 @@ const PersonalityAnalysis = () => {
     setError(null);
   };
 
-  const renderStep = () => {
-    switch (currentStep) {
-      case 1:
+  const renderAssessment = () => {
+    switch (currentSection) {
+      case 'personalInfo':
         return <PersonalInfo data={profile.personalInfo} updateData={(data) => updateFormData('personalInfo', data)} />;
-      case 2:
+      case 'preferences':
         return <Preferences data={profile.preferences} updateData={(data) => updateFormData('preferences', data)} />;
-      case 3:
+      case 'psychologicalProfile':
         return <PsychologicalProfile data={profile.psychologicalProfile} updateData={(data) => updateFormData('psychologicalProfile', data)} />;
-      case 4:
+      case 'relationshipGoals':
         return <RelationshipGoals data={profile.relationshipGoals} updateData={(data) => updateFormData('relationshipGoals', data)} />;
-      case 5:
+      case 'behavioralInsights':
         return <BehavioralInsights data={profile.behavioralInsights} updateData={(data) => updateFormData('behavioralInsights', data)} />;
-      case 6:
+      case 'dealbreakers':
         return <Dealbreakers data={profile.dealbreakers} updateData={(data) => updateFormData('dealbreakers', data)} />;
       default:
         return null;
     }
   };
 
-  const handleStepClick = async (stepNumber: number) => {
-    // Allow direct navigation if profile is complete
-    if (isProfileComplete) {
-      setCurrentStep(stepNumber);
-      setCurrentSection(steps[stepNumber - 1].key as keyof ProfileSections);
-      setError(null);
-      window.scrollTo(0, 0);
-      return;
-    }
-
-    // Don't allow clicking future steps if profile is incomplete
-    if (stepNumber > currentStep) return;
-
-    // Save current section before switching
-    if (currentSection) {
-      if (!validateCurrentSection()) return;
-      const saved = await saveCurrentSection();
-      if (!saved) return;
-    }
-
-    setCurrentStep(stepNumber);
-    setError(null);
-    window.scrollTo(0, 0);
-  };
-
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"></div>
       </div>
     );
   }
@@ -302,98 +251,37 @@ const PersonalityAnalysis = () => {
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-4">Personality Analysis</h1>
-        <p className="text-gray-600">Complete this comprehensive assessment to find your perfect match</p>
+        <h1 className="text-3xl font-bold text-gray-800 mb-4">
+          {SECTION_TITLES[currentSection]}
+        </h1>
+        <p className="text-gray-600">Complete this assessment to find your perfect match</p>
       </div>
 
       {error && <ErrorAlert message={error} onClose={() => setError(null)} />}
 
-      {/* Progress Steps */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          {steps.map((step) => (
-            <div 
-              key={step.id} 
-              className={`flex items-center ${step.id <= currentStep ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-              onClick={() => handleStepClick(step.id)}
-            >
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  step.id < currentStep
-                    ? 'bg-green-500 text-white'
-                    : step.id === currentStep
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-200 text-gray-600'
-                }`}
-              >
-                {step.id < currentStep ? (
-                  <Check className="w-5 h-5" />
-                ) : (
-                  step.id
-                )}
-              </div>
-              {step.id !== steps.length && (
-                <div
-                  className={`h-1 w-12 md:w-24 ${
-                    step.id < currentStep ? 'bg-green-500' : 'bg-gray-200'
-                  }`}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="flex justify-between text-sm text-gray-600">
-          {steps.map((step) => (
-            <div 
-              key={step.id} 
-              className={`w-24 text-center ${step.id <= currentStep ? 'cursor-pointer hover:text-indigo-600' : 'cursor-not-allowed'}`}
-              onClick={() => handleStepClick(step.id)}
-            >
-              {step.name}
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Form Content */}
       <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-        {renderStep()}
+        {renderAssessment()}
       </div>
 
       {/* Navigation Buttons */}
       <div className="flex justify-between">
         <button
-          onClick={handlePrevious}
-          disabled={currentStep === 1 || isSaving}
-          className={`flex items-center px-6 py-3 rounded-lg ${
-            currentStep === 1 || isSaving
-              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              : 'bg-gray-600 text-white hover:bg-gray-700'
-          }`}
+          onClick={handleBackToAssessments}
+          className="flex items-center px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
         >
           <ArrowLeft className="w-5 h-5 mr-2" />
-          Previous
+          Back to Assessments
         </button>
         
-        {currentStep === steps.length ? (
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting || isSaving}
-            className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400"
-          >
-            {isSubmitting ? 'Submitting...' : 'Submit'}
-            <Check className="w-5 h-5 ml-2" />
-          </button>
-        ) : (
-          <button
-            onClick={handleNext}
-            disabled={isSaving}
-            className="flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-indigo-400"
-          >
-            {isSaving ? 'Saving...' : 'Next'}
-            <ArrowRight className="w-5 h-5 ml-2" />
-          </button>
-        )}
+        <button
+          onClick={handleSaveAndContinue}
+          disabled={isSaving}
+          className="flex items-center px-6 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:bg-pink-400"
+        >
+          {isSaving ? 'Saving...' : 'Save & Continue'}
+          <Check className="w-5 h-5 ml-2" />
+        </button>
       </div>
     </div>
   );

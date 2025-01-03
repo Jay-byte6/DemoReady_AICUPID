@@ -4,6 +4,9 @@ export interface CompatibilityDetails {
   challenges: string[];
   tips: string[];
   long_term_prediction: string;
+  emotional: number;
+  intellectual: number;
+  lifestyle: number;
 }
 
 export interface CompatibilityScore {
@@ -94,33 +97,33 @@ export interface AIPersona {
 }
 
 export interface UserProfile {
-  id?: string;
+  id: string;
   user_id: string;
-  fullname: string;
-  age: number;
+  name: string;
+  email: string;
   gender: string;
+  age: number;
   location: string;
+  bio: string;
   occupation: string;
-  relationship_history: string;
-  lifestyle: string;
   profile_image: string | null;
+  interests: string[];
+  created_at: string;
+  updated_at: string;
   cupid_id: string;
-  created_at?: string;
-  updated_at?: string;
-  interests?: string[];
-  notification_preferences?: {
-    new_match: boolean;
-    new_message: boolean;
-    profile_view: boolean;
-    email_notifications: boolean;
-  };
-  visibility_settings?: {
+  visibility_settings: {
     smart_matching_visible: boolean;
     profile_image_visible: boolean;
     occupation_visible: boolean;
     contact_visible: boolean;
     master_visibility: boolean;
   };
+  personalInfo: Record<string, any>;
+  preferences: Record<string, any>;
+  psychologicalProfile: Record<string, any>;
+  relationshipGoals: Record<string, any>;
+  behavioralInsights: Record<string, any>;
+  dealbreakers: Record<string, any>;
 }
 
 export interface PersonaTrait {
@@ -235,29 +238,29 @@ export interface RelationshipInsight {
   updated_at: string;
 }
 
-export interface SmartMatchProfile extends UserProfile {
+export interface SmartMatchProfile {
   id: string;
-  age: number;
-  gender: string;
-  location: string;
-  occupation: string;
-  relationship_history: string;
-  lifestyle: string;
+  user_id: string;
+  cupid_id?: string;
+  fullname: string;
+  age?: number;
+  location?: string;
+  occupation?: string;
+  profile_image?: string | null;
+  interests?: string[];
+  bio?: string;
+  education?: string;
+  personality_traits?: string[];
 }
 
 export interface SmartMatch {
   id: string;
   user_id: string;
-  profile: UserProfile;
+  profile: SmartMatchProfile;
   compatibility_score: number;
   compatibility_details: CompatibilityDetails;
   is_favorite?: boolean;
-  last_updated: string;
-  created_at: string;
-  request_status?: {
-    type: 'PERSONA_VIEW' | 'CHAT';
-    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
-  };
+  last_updated?: string;
 }
 
 export interface Message {
@@ -300,4 +303,13 @@ export interface PersonaAspectData extends PersonaAspect {
   aspect_type: AspectType;
   is_positive: boolean;
   user_id: string;
+}
+
+export interface ProfileSections {
+  personalInfo: Record<string, any>;
+  preferences: Record<string, any>;
+  psychologicalProfile: Record<string, any>;
+  relationshipGoals: Record<string, any>;
+  behavioralInsights: Record<string, any>;
+  dealbreakers: Record<string, any>;
 } 

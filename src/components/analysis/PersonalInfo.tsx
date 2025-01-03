@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 interface Props {
   data: any;
@@ -6,6 +6,14 @@ interface Props {
 }
 
 const PersonalInfo: React.FC<Props> = ({ data, updateData }) => {
+  useEffect(() => {
+    // Check for pre-selected gender in localStorage
+    const selectedGender = localStorage.getItem('selectedGender');
+    if (selectedGender && !data.gender) {
+      updateData({ gender: selectedGender });
+    }
+  }, []);
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-semibold mb-6">Personal Information</h2>

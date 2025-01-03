@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Breadcrumb from './components/Breadcrumb';
+import LandingPage from './pages/LandingPage';
 import Home from './pages/Home';
 import Login from './components/auth/Login';
 import SignUp from './components/auth/SignUp';
@@ -24,7 +25,8 @@ const App = () => {
           <Breadcrumb />
           <main className="pt-4">
             <Routes>
-              <Route path="/" element={<Home />} />
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/home" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<SignUp />} />
               <Route

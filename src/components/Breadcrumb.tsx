@@ -9,6 +9,7 @@ interface BreadcrumbItem {
 
 const routeMap: Record<string, string> = {
   '': 'Home',
+  'home': 'Dashboard',
   'login': 'Login',
   'signup': 'Sign Up',
   'registration': 'Registration',
@@ -22,6 +23,12 @@ const routeMap: Record<string, string> = {
 
 const Breadcrumb: React.FC = () => {
   const location = useLocation();
+  
+  // Don't show breadcrumb on landing page
+  if (location.pathname === '/') {
+    return null;
+  }
+
   const pathnames = location.pathname.split('/').filter((x) => x);
 
   const breadcrumbs: BreadcrumbItem[] = pathnames.map((path, index) => {
@@ -33,7 +40,7 @@ const Breadcrumb: React.FC = () => {
   });
 
   // Always include Home as the first breadcrumb
-  breadcrumbs.unshift({ label: 'Home', path: '/' });
+  breadcrumbs.unshift({ label: 'Dashboard', path: '/home' });
 
   return (
     <nav className="bg-white shadow-sm">
