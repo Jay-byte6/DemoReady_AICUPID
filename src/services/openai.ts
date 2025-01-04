@@ -68,147 +68,143 @@ interface ChatHistory {
   personalityData?: any;
 }
 
-export async function generateDetailedPersonaAnalysis(
-  profile: UserProfile,
-  chatHistory: ChatHistory
-): Promise<PersonaAnalysis | null> {
+export async function generateDetailedPersonaAnalysis(userData: any): Promise<PersonaAnalysis | null> {
   try {
-    if (DEBUG) {
-      console.log('Generating persona analysis for profile:', {
-        id: profile.id,
-        hasApiKey: !!OPENAI_API_KEY,
-        hasChatHistory: !!chatHistory,
-        profileData: profile
-      });
+    console.log('Generating persona analysis for profile:', userData);
+
+    // Ensure we have required data
+    if (!userData.personalInfo) {
+      throw new Error('Personal information is required for analysis');
     }
 
-    // Enhanced profile validation
-    if (!profile || !profile.id || !profile.fullname) {
-      console.warn('Insufficient profile data for analysis:', profile);
-      return createDefaultErrorResponse('Insufficient profile data');
-    }
-
-    // Ensure OpenAI API key is available
-    if (!OPENAI_API_KEY) {
-      console.error('OpenAI API key is not configured');
-      return createDefaultErrorResponse('API configuration error');
-    }
-
-    const sanitizedProfile = {
-      id: profile.id,
-      fullname: profile.fullname,
-      occupation: profile.occupation || '',
-      location: profile.location || '',
-      age: profile.age || null,
-      relationship_history: profile.relationship_history || '',
-      lifestyle: profile.lifestyle || '',
-      interests: profile.interests || []
-    };
-
-    const prompt = `As an expert psychologist and relationship counselor, analyze this person's profile and provide a detailed personality assessment in JSON format. Consider all available information:
+    // Create analysis prompt
+    const prompt = {
+      role: 'system',
+      content: `Generate a detailed persona analysis for a dating profile. Return the analysis in the following exact JSON structure:
+{
+  "positive": {
+    "personality_traits": ["trait1", "trait2", "trait3"],
+    "personality_examples": ["example1", "example2"],
+    "personality_summary": "Summary text",
+    "core_values": ["value1", "value2", "value3"],
+    "value_examples": ["example1", "example2"],
+    "values_summary": "Summary text",
+    "behavioral_traits": ["trait1", "trait2", "trait3"],
+    "behavior_examples": ["example1", "example2"],
+    "behavior_summary": "Summary text",
+    "hobbies": ["hobby1", "hobby2", "hobby3"],
+    "hobby_examples": ["example1", "example2"],
+    "hobbies_summary": "Summary text"
+  },
+  "negative": {
+    "emotional_aspects": ["aspect1", "aspect2", "aspect3"],
+    "emotional_examples": ["example1", "example2"],
+    "emotional_summary": "Summary text",
+    "social_aspects": ["aspect1", "aspect2", "aspect3"],
+    "social_examples": ["example1", "example2"],
+    "social_summary": "Summary text",
+    "lifestyle_aspects": ["aspect1", "aspect2", "aspect3"],
+    "lifestyle_examples": ["example1", "example2"],
+    "lifestyle_summary": "Summary text",
+    "relational_aspects": ["aspect1", "aspect2", "aspect3"],
+    "relational_examples": ["example1", "example2"],
+    "relational_summary": "Summary text"
+  }
+}
 
 Profile Information:
-${JSON.stringify(sanitizedProfile, null, 2)}
+- Name: ${userData.personalInfo.name}
+- Age: ${userData.personalInfo.age}
+- Location: ${userData.personalInfo.location}
+- Occupation: ${userData.personalInfo.occupation}
+- Relationship History: ${userData.personalInfo.relationshipHistory}
+- Lifestyle: ${userData.personalInfo.lifestyle}
 
-${chatHistory ? `Chat History & Interactions:
-${JSON.stringify(chatHistory, null, 2)}` : ''}
+Generate a comprehensive analysis based on this information. Ensure all arrays have at least 2-3 items and all summaries are concise but meaningful.`
+    };
 
-Analyze and provide insights in the following structured format:
-
-{
-  "positivePersona": {
-    "personality_traits": {
-      "traits": ["List 5-7 key personality traits"],
-      "examples": ["Provide specific examples from profile/chat for each trait"],
-      "summary": "Comprehensive personality summary",
-      "intensity": 75
-    },
-    "core_values": {
-      "traits": ["List 4-6 fundamental values"],
-      "examples": ["Real examples demonstrating each value"],
-      "summary": "Analysis of value system",
-      "intensity": 80
-    },
-    "behavioral_traits": {
-      "traits": ["List 5-7 behavioral patterns"],
-      "examples": ["Specific situations showing each behavior"],
-      "summary": "Overall behavioral analysis",
-      "intensity": 70
-    },
-    "hobbies_interests": {
-      "traits": ["List all identified interests"],
-      "examples": ["How they pursue each interest"],
-      "summary": "Analysis of personal interests",
-      "intensity": 85
-    }
-  },
-  "negativePersona": {
-    "emotional_aspects": {
-      "traits": ["List 3-5 emotional growth areas"],
-      "examples": ["Specific situations showing each aspect"],
-      "summary": "Analysis of emotional challenges",
-      "intensity": 60
-    },
-    "social_aspects": {
-      "traits": ["List 3-5 social growth areas"],
-      "examples": ["Examples of social interaction patterns"],
-      "summary": "Analysis of social challenges",
-      "intensity": 55
-    },
-    "lifestyle_aspects": {
-      "traits": ["List 3-5 lifestyle challenges"],
-      "examples": ["Real examples of each challenge"],
-      "summary": "Analysis of lifestyle improvements",
-      "intensity": 50
-    },
-    "relational_aspects": {
-      "traits": ["List 3-5 relationship growth areas"],
-      "examples": ["Specific relationship patterns"],
-      "summary": "Analysis of relationship challenges",
-      "intensity": 65
-    }
-  }
-}`;
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
-      messages: [
-        { 
-          role: "system", 
-          content: "You are an expert psychologist and relationship counselor with deep expertise in personality analysis. Provide detailed, evidence-based analysis in valid JSON format. Always include both positive and negative aspects of personality."
-        },
-        { role: "user", content: prompt }
-      ],
+    // Call OpenAI API
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [prompt],
       temperature: 0.7,
-      max_tokens: 2500,
+      max_tokens: 1500,
       response_format: { type: "json_object" }
     });
 
-    if (!completion.choices[0]?.message?.content) {
-      console.warn('No content in OpenAI response');
-      return createDefaultErrorResponse('Analysis generation failed');
+    const analysisText = response.choices[0]?.message?.content;
+    if (!analysisText) {
+      throw new Error('No analysis generated');
     }
 
-    const analysis = JSON.parse(completion.choices[0].message.content);
-    
-    // Validate the analysis structure
-    if (!isValidAnalysis(analysis)) {
-      console.warn('Invalid analysis structure received:', analysis);
-      return createDefaultErrorResponse('Invalid analysis format');
+    // Parse the response
+    const analysis = JSON.parse(analysisText);
+
+    // Validate the structure
+    if (!analysis.positive || !analysis.negative) {
+      throw new Error('Invalid analysis structure');
     }
 
-    return transformAIResponseToPersonaAnalysis(analysis);
+    // Format the response into PersonaAnalysis structure
+    const personaAnalysis: PersonaAnalysis = {
+      positivePersona: {
+        personality_traits: {
+          traits: analysis.positive.personality_traits || [],
+          examples: analysis.positive.personality_examples || [],
+          summary: analysis.positive.personality_summary || null,
+          intensity: 0.8
+        },
+        core_values: {
+          traits: analysis.positive.core_values || [],
+          examples: analysis.positive.value_examples || [],
+          summary: analysis.positive.values_summary || null,
+          intensity: 0.8
+        },
+        behavioral_traits: {
+          traits: analysis.positive.behavioral_traits || [],
+          examples: analysis.positive.behavior_examples || [],
+          summary: analysis.positive.behavior_summary || null,
+          intensity: 0.8
+        },
+        hobbies_interests: {
+          traits: analysis.positive.hobbies || [],
+          examples: analysis.positive.hobby_examples || [],
+          summary: analysis.positive.hobbies_summary || null,
+          intensity: 0.8
+        }
+      },
+      negativePersona: {
+        emotional_aspects: {
+          traits: analysis.negative.emotional_aspects || [],
+          examples: analysis.negative.emotional_examples || [],
+          summary: analysis.negative.emotional_summary || null,
+          intensity: 0.6
+        },
+        social_aspects: {
+          traits: analysis.negative.social_aspects || [],
+          examples: analysis.negative.social_examples || [],
+          summary: analysis.negative.social_summary || null,
+          intensity: 0.6
+        },
+        lifestyle_aspects: {
+          traits: analysis.negative.lifestyle_aspects || [],
+          examples: analysis.negative.lifestyle_examples || [],
+          summary: analysis.negative.lifestyle_summary || null,
+          intensity: 0.6
+        },
+        relational_aspects: {
+          traits: analysis.negative.relational_aspects || [],
+          examples: analysis.negative.relational_examples || [],
+          summary: analysis.negative.relational_summary || null,
+          intensity: 0.6
+        }
+      }
+    };
+
+    return personaAnalysis;
   } catch (error) {
-    console.error('Error in generateDetailedPersonaAnalysis:', error);
-    if (DEBUG) {
-      const err = error as Error;
-      console.log('Error details:', {
-        message: err.message,
-        name: err.name,
-        stack: err.stack
-      });
-    }
-    return createDefaultErrorResponse('Error generating analysis');
+    console.error('Error generating detailed persona analysis:', error);
+    return null;
   }
 }
 

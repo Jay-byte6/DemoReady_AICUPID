@@ -98,33 +98,65 @@ export const profileService = {
     }
   },
 
-  async saveUserProfile(userId: string, profile: ProfileSections): Promise<void> {
+  async saveUserProfile(userId: string, profile: any): Promise<void> {
     try {
-      // Save personality analysis data
+      // First, get or create the user profile to ensure we have a profile_id
+      const { data: existingProfile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('user_id', userId)
+        .single();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        throw profileError;
+      }
+
+      let profileId;
+      if (!existingProfile) {
+        // Create new profile if it doesn't exist
+        const { data: newProfile, error: createError } = await supabase
+          .from('user_profiles')
+          .insert([{
+            user_id: userId,
+            ...profile.personalInfo,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
+          .select('id')
+          .single();
+
+        if (createError) throw createError;
+        profileId = newProfile.id;
+      } else {
+        profileId = existingProfile.id;
+        // Update existing profile
+        const { error: updateError } = await supabase
+          .from('user_profiles')
+          .update({
+            ...profile.personalInfo,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId);
+
+        if (updateError) throw updateError;
+      }
+
+      // Now save/update personality analysis with the profile_id
       const { error: analysisError } = await supabase
         .from('personality_analysis')
         .upsert({
           user_id: userId,
-          preferences: profile.preferences,
-          psychological_profile: profile.psychologicalProfile,
-          relationship_goals: profile.relationshipGoals,
-          behavioral_insights: profile.behavioralInsights,
-          dealbreakers: profile.dealbreakers,
+          profile_id: profileId,
+          preferences: profile.preferences || {},
+          psychological_profile: profile.psychologicalProfile || {},
+          relationship_goals: profile.relationshipGoals || {},
+          behavioral_insights: profile.behavioralInsights || {},
+          dealbreakers: profile.dealbreakers || {},
           updated_at: new Date().toISOString()
         });
 
       if (analysisError) throw analysisError;
 
-      // Save personal info to user_profiles
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .upsert({
-          user_id: userId,
-          ...profile.personalInfo,
-          updated_at: new Date().toISOString()
-        });
-
-      if (profileError) throw profileError;
     } catch (error) {
       console.error('Error saving user profile:', error);
       throw error;
@@ -161,7 +193,21 @@ export const profileService = {
           .from('user_profiles')
           .insert([{
             user_id: userId,
-            ...profile,
+            name: profile.name || '',
+            email: profile.email || '',
+            age: profile.age || 18,
+            location: profile.location || '',
+            bio: profile.bio || '',
+            occupation: profile.occupation || '',
+            profile_image: profile.profile_image || '',
+            interests: profile.interests || [],
+            visibility_settings: profile.visibility_settings || {
+              smart_matching_visible: true,
+              profile_image_visible: true,
+              occupation_visible: true,
+              contact_visible: true,
+              master_visibility: true
+            },
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           }])
@@ -170,6 +216,31 @@ export const profileService = {
 
         if (error) throw error;
         result = data;
+
+        // Create initial personality analysis record
+        const { error: analysisError } = await supabase
+          .from('personality_analysis')
+          .insert([{
+            user_id: userId,
+            profile_id: result.id, // Use the newly created profile's ID
+            preferences: {},
+            psychological_profile: {},
+            relationship_goals: {},
+            behavioral_insights: {},
+            dealbreakers: {},
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }]);
+
+        if (analysisError) {
+          console.error('Error creating personality analysis:', analysisError);
+          // Delete the profile if analysis creation fails
+          await supabase
+            .from('user_profiles')
+            .delete()
+            .eq('id', result.id);
+          throw analysisError;
+        }
       }
 
       return result;
@@ -1422,6 +1493,142 @@ export const profileService = {
 
     } catch (error) {
       console.error('Error in findMatchByCupidId:', error);
+      return null;
+    }
+  },
+
+  async generatePersona(userId: string): Promise<PersonaAnalysis | null> {
+    try {
+      // First get the user profile
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (profileError) {
+        console.error('Error fetching profile:', profileError);
+        throw profileError;
+      }
+
+      if (!profile) {
+        throw new Error('Profile not found');
+      }
+
+      // Get personality analysis data
+      const { data: analysis, error: analysisError } = await supabase
+        .from('personality_analysis')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (analysisError && analysisError.code !== 'PGRST116') {
+        console.error('Error fetching analysis:', analysisError);
+        throw analysisError;
+      }
+
+      // Combine profile and analysis data
+      const userData = {
+        personalInfo: profile,
+        preferences: analysis?.preferences || {},
+        psychologicalProfile: analysis?.psychological_profile || {},
+        relationshipGoals: analysis?.relationship_goals || {},
+        behavioralInsights: analysis?.behavioral_insights || {},
+        dealbreakers: analysis?.dealbreakers || {}
+      };
+
+      // Generate detailed persona analysis using OpenAI
+      const personaAnalysis = await generateDetailedPersonaAnalysis(userData);
+
+      if (!personaAnalysis) {
+        throw new Error('Failed to generate persona analysis');
+      }
+
+      // Save positive aspects
+      const positiveAspects = [
+        {
+          user_id: userId,
+          aspect_type: 'personality_traits',
+          ...personaAnalysis.positivePersona.personality_traits,
+          is_positive: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          user_id: userId,
+          aspect_type: 'core_values',
+          ...personaAnalysis.positivePersona.core_values,
+          is_positive: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          user_id: userId,
+          aspect_type: 'behavioral_traits',
+          ...personaAnalysis.positivePersona.behavioral_traits,
+          is_positive: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          user_id: userId,
+          aspect_type: 'hobbies_interests',
+          ...personaAnalysis.positivePersona.hobbies_interests,
+          is_positive: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ];
+
+      // Save negative aspects
+      const negativeAspects = [
+        {
+          user_id: userId,
+          aspect_type: 'emotional_aspects',
+          ...personaAnalysis.negativePersona.emotional_aspects,
+          is_positive: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          user_id: userId,
+          aspect_type: 'social_aspects',
+          ...personaAnalysis.negativePersona.social_aspects,
+          is_positive: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          user_id: userId,
+          aspect_type: 'lifestyle_aspects',
+          ...personaAnalysis.negativePersona.lifestyle_aspects,
+          is_positive: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          user_id: userId,
+          aspect_type: 'relational_aspects',
+          ...personaAnalysis.negativePersona.relational_aspects,
+          is_positive: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ];
+
+      // Save all aspects to database
+      const { error: aspectError } = await supabase
+        .from('persona_aspects')
+        .upsert([...positiveAspects, ...negativeAspects]);
+
+      if (aspectError) {
+        console.error('Error saving persona aspects:', aspectError);
+        throw aspectError;
+      }
+
+      return personaAnalysis;
+    } catch (error) {
+      console.error('Error generating persona:', error);
       return null;
     }
   }
