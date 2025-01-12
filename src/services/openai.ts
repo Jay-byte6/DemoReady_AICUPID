@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { UserProfile, PersonaAnalysis, PersonaAspect, CompatibilityScore } from '../types';
+import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Get API key from environment variable with Vite prefix
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
@@ -44,12 +45,14 @@ export const generatePersonaAnalysis = async (data: { user1: any, user2: any }) 
     4. Tips for better understanding
     5. Long-term relationship prediction`;
 
+    const messages: ChatCompletionMessageParam[] = [
+      { role: "system", content: "You are an expert relationship counselor." },
+      { role: "user", content: prompt }
+    ];
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4-turbo-preview",
-      messages: [
-        { role: "system", content: "You are an expert relationship counselor." },
-        { role: "user", content: prompt }
-      ],
+      messages,
       temperature: 0.7,
       max_tokens: 1000
     });
@@ -78,7 +81,7 @@ export async function generateDetailedPersonaAnalysis(userData: any): Promise<Pe
     }
 
     // Create analysis prompt
-    const prompt = {
+    const messages: ChatCompletionMessageParam[] = [{
       role: 'system',
       content: `Generate a detailed persona analysis for a dating profile. Return the analysis in the following exact JSON structure:
 {
@@ -121,12 +124,12 @@ Profile Information:
 - Lifestyle: ${userData.personalInfo.lifestyle}
 
 Generate a comprehensive analysis based on this information. Ensure all arrays have at least 2-3 items and all summaries are concise but meaningful.`
-    };
+    }];
 
     // Call OpenAI API
     const response = await openai.chat.completions.create({
       model: 'gpt-4',
-      messages: [prompt],
+      messages,
       temperature: 0.7,
       max_tokens: 1500,
       response_format: { type: "json_object" }
@@ -148,6 +151,8 @@ Generate a comprehensive analysis based on this information. Ensure all arrays h
     // Format the response into PersonaAnalysis structure
     const personaAnalysis: PersonaAnalysis = {
       positivePersona: {
+        id: undefined,
+        user_id: userData.user_id || '',
         personality_traits: {
           traits: analysis.positive.personality_traits || [],
           examples: analysis.positive.personality_examples || [],
@@ -171,7 +176,10 @@ Generate a comprehensive analysis based on this information. Ensure all arrays h
           examples: analysis.positive.hobby_examples || [],
           summary: analysis.positive.hobbies_summary || null,
           intensity: 0.8
-        }
+        },
+        summary: '',
+        created_at: undefined,
+        updated_at: undefined
       },
       negativePersona: {
         emotional_aspects: {
