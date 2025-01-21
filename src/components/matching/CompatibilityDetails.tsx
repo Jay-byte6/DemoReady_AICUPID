@@ -25,7 +25,7 @@ const CompatibilityDetails: React.FC<CompatibilityDetailsProps> = ({ match, onCl
               </p>
             </div>
             <div className="text-right">
-              <div className="text-3xl font-bold text-indigo-600">
+              <div className="text-5xl font-bold text-pink-500 mb-1">
                 {Math.round(compatibility_score)}%
               </div>
               <div className="text-sm text-gray-500">Overall Match</div>
@@ -38,13 +38,13 @@ const CompatibilityDetails: React.FC<CompatibilityDetailsProps> = ({ match, onCl
           {/* Strengths */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <Heart className="h-6 w-6 text-green-500" />
+              <Heart className="h-6 w-6 text-pink-500" />
               <h3 className="text-lg font-semibold text-gray-900">Relationship Strengths</h3>
             </div>
             <ul className="space-y-2">
               {compatibility_details.strengths.map((strength, index) => (
                 <li key={index} className="flex items-start gap-2">
-                  <span className="text-green-500 mt-1">•</span>
+                  <span className="text-pink-500 mt-1">•</span>
                   <span className="text-gray-700">{strength}</span>
                 </li>
               ))}
@@ -70,13 +70,13 @@ const CompatibilityDetails: React.FC<CompatibilityDetailsProps> = ({ match, onCl
           {/* Tips */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <Lightbulb className="h-6 w-6 text-blue-500" />
+              <Lightbulb className="h-6 w-6 text-pink-400" />
               <h3 className="text-lg font-semibold text-gray-900">Relationship Tips</h3>
             </div>
             <ul className="space-y-2">
               {compatibility_details.tips.map((tip, index) => (
                 <li key={index} className="flex items-start gap-2">
-                  <span className="text-blue-500 mt-1">•</span>
+                  <span className="text-pink-400 mt-1">•</span>
                   <span className="text-gray-700">{tip}</span>
                 </li>
               ))}
@@ -86,7 +86,7 @@ const CompatibilityDetails: React.FC<CompatibilityDetailsProps> = ({ match, onCl
           {/* Long-term Prediction */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <Compass className="h-6 w-6 text-purple-500" />
+              <Compass className="h-6 w-6 text-pink-500" />
               <h3 className="text-lg font-semibold text-gray-900">Long-term Potential</h3>
             </div>
             <p className="text-gray-700">
@@ -100,7 +100,7 @@ const CompatibilityDetails: React.FC<CompatibilityDetailsProps> = ({ match, onCl
           <div className="flex justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+              className="px-4 py-2 bg-pink-50 text-pink-500 rounded-lg hover:bg-pink-100"
             >
               Close
             </button>

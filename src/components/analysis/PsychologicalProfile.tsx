@@ -1,8 +1,19 @@
 import React from 'react';
 
+interface PsychologicalProfileData {
+  extroversion?: number;
+  openness?: number;
+  agreeableness?: number;
+  conscientiousness?: number;
+  'emotional stability'?: number;
+  communicationStyle?: 'direct' | 'diplomatic' | 'expressive' | 'analytical' | '';
+  conflictResolution?: 'collaborative' | 'compromising' | 'accommodating' | 'avoiding' | '';
+  [key: string]: number | string | undefined;
+}
+
 interface Props {
-  data: any;
-  updateData: (data: any) => void;
+  data: PsychologicalProfileData;
+  updateData: (data: Partial<PsychologicalProfileData>) => void;
 }
 
 const PsychologicalProfile: React.FC<Props> = ({ data, updateData }) => {
@@ -16,38 +27,41 @@ const PsychologicalProfile: React.FC<Props> = ({ data, updateData }) => {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold mb-6">Psychological Profile</h2>
+      <h2 className="text-2xl font-semibold mb-6 text-pink-500">Psychological Profile</h2>
 
-      {personalityTraits.map(({ trait, description }) => (
-        <div key={trait}>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {trait}
-            <span className="text-sm text-gray-500 ml-2">({description})</span>
-          </label>
-          <div className="flex items-center space-x-4">
-            <input
-              type="range"
-              min="1"
-              max="10"
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-              value={data[trait.toLowerCase()] || 5}
-              onChange={(e) => updateData({ [trait.toLowerCase()]: e.target.value })}
-            />
-            <span className="text-sm text-gray-600 w-8">
-              {data[trait.toLowerCase()] || 5}/10
-            </span>
+      {personalityTraits.map(({ trait, description }) => {
+        const traitKey = trait.toLowerCase().replace(/ /g, ' ') as keyof PsychologicalProfileData;
+        return (
+          <div key={trait}>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {trait}
+              <span className="text-sm text-gray-500 ml-2">({description})</span>
+            </label>
+            <div className="flex items-center space-x-4">
+              <input
+                type="range"
+                min="1"
+                max="10"
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                value={data[traitKey] || 5}
+                onChange={(e) => updateData({ [traitKey]: parseInt(e.target.value) })}
+              />
+              <span className="text-sm text-gray-600 w-8">
+                {data[traitKey] || 5}/10
+              </span>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Communication Style
         </label>
         <select
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+          className="w-full px-4 py-3 rounded-xl border-2 border-pink-500/30 hover:border-pink-500/50 focus:border-pink-500/50 focus:outline-none transition-all duration-300 bg-white"
           value={data.communicationStyle || ''}
-          onChange={(e) => updateData({ communicationStyle: e.target.value })}
+          onChange={(e) => updateData({ communicationStyle: e.target.value as PsychologicalProfileData['communicationStyle'] })}
         >
           <option value="">Select style</option>
           <option value="direct">Direct and Straightforward</option>
@@ -62,9 +76,9 @@ const PsychologicalProfile: React.FC<Props> = ({ data, updateData }) => {
           Conflict Resolution Approach
         </label>
         <select
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+          className="w-full px-4 py-3 rounded-xl border-2 border-pink-500/30 hover:border-pink-500/50 focus:border-pink-500/50 focus:outline-none transition-all duration-300 bg-white"
           value={data.conflictResolution || ''}
-          onChange={(e) => updateData({ conflictResolution: e.target.value })}
+          onChange={(e) => updateData({ conflictResolution: e.target.value as PsychologicalProfileData['conflictResolution'] })}
         >
           <option value="">Select approach</option>
           <option value="collaborative">Collaborative Problem-Solving</option>

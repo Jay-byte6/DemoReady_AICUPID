@@ -1,5 +1,5 @@
 import React from 'react';
-import { SmartMatch } from '../../types';
+import { SmartMatch } from '../../types/profile';
 
 interface CompatibilityInsightsProps {
   profile: SmartMatch;

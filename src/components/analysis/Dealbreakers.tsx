@@ -1,8 +1,14 @@
 import React from 'react';
 
+interface DealbreakersData {
+  dealbreakers?: string[];
+  customDealbreakers?: string;
+  dealbreakersFlexibility?: 'strict' | 'moderate' | 'flexible' | 'very-flexible' | '';
+}
+
 interface Props {
-  data: any;
-  updateData: (data: any) => void;
+  data: DealbreakersData;
+  updateData: (data: Partial<DealbreakersData>) => void;
 }
 
 const Dealbreakers: React.FC<Props> = ({ data, updateData }) => {
@@ -21,7 +27,7 @@ const Dealbreakers: React.FC<Props> = ({ data, updateData }) => {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold mb-6">Dealbreakers</h2>
+      <h2 className="text-2xl font-semibold mb-6 text-pink-500">Dealbreakers</h2>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-4">
@@ -32,7 +38,7 @@ const Dealbreakers: React.FC<Props> = ({ data, updateData }) => {
             <label key={dealbreaker} className="flex items-center space-x-2">
               <input
                 type="checkbox"
-                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="rounded border-2 border-pink-500/30 text-pink-500 hover:border-pink-500/50 focus:border-pink-500/50 focus:outline-none transition-all duration-300"
                 checked={data.dealbreakers?.includes(dealbreaker) || false}
                 onChange={(e) => {
                   const current = data.dealbreakers || [];
@@ -56,7 +62,7 @@ const Dealbreakers: React.FC<Props> = ({ data, updateData }) => {
           Additional Dealbreakers
         </label>
         <textarea
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+          className="w-full px-4 py-3 rounded-xl border-2 border-pink-500/30 hover:border-pink-500/50 focus:border-pink-500/50 focus:outline-none transition-all duration-300 min-h-[120px] bg-white"
           rows={4}
           value={data.customDealbreakers || ''}
           onChange={(e) => updateData({ customDealbreakers: e.target.value })}
@@ -69,9 +75,9 @@ const Dealbreakers: React.FC<Props> = ({ data, updateData }) => {
           Flexibility Level
         </label>
         <select
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+          className="w-full px-4 py-3 rounded-xl border-2 border-pink-500/30 hover:border-pink-500/50 focus:border-pink-500/50 focus:outline-none transition-all duration-300 bg-white"
           value={data.dealbreakersFlexibility || ''}
-          onChange={(e) => updateData({ dealbreakersFlexibility: e.target.value })}
+          onChange={(e) => updateData({ dealbreakersFlexibility: e.target.value as DealbreakersData['dealbreakersFlexibility'] })}
         >
           <option value="">Select flexibility level</option>
           <option value="strict">Very Strict - No Exceptions</option>

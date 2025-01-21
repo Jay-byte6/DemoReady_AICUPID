@@ -5,12 +5,23 @@ import { supabase } from '../../lib/supabase';
 import { Bell, Check, MessageCircle, Heart, Eye, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+interface NotificationContent {
+  title: string;
+  message: string;
+  targetId?: string;
+}
+
 interface Notification {
   id: string;
   type: 'NEW_MATCH' | 'NEW_MESSAGE' | 'PROFILE_VIEW';
-  content: any;
+  content: NotificationContent;
   read: boolean;
   created_at: string;
+}
+
+interface NotificationError extends Error {
+  code?: string;
+  details?: string;
 }
 
 const NotificationCenter: React.FC = () => {
@@ -19,6 +30,7 @@ const NotificationCenter: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -57,8 +69,11 @@ const NotificationCenter: React.FC = () => {
       const notifications = await profileService.getNotifications(user.id);
       setNotifications(notifications);
       setUnreadCount(notifications.filter(n => !n.read).length);
+      setError(null);
     } catch (error) {
-      console.error('Error loading notifications:', error);
+      const notificationError = error as NotificationError;
+      console.error('Error loading notifications:', notificationError);
+      setError(notificationError.message || 'Failed to load notifications');
     }
   };
 
@@ -67,25 +82,37 @@ const NotificationCenter: React.FC = () => {
       // Mark as read first
       await handleMarkAsRead(notification.id);
 
-      // Navigate based on notification type
+      // Navigate based on notification type and content
       switch (notification.type) {
         case 'NEW_MATCH':
-          navigate('/smart-matching');
+          if (notification.content.targetId) {
+            navigate(`/smart-matching/${notification.content.targetId}`);
+          } else {
+            navigate('/smart-matching');
+          }
           break;
         case 'NEW_MESSAGE':
-          navigate('/messages');
+          if (notification.content.targetId) {
+            navigate(`/messages/${notification.content.targetId}`);
+          } else {
+            navigate('/messages');
+          }
           break;
         case 'PROFILE_VIEW':
           navigate('/profile');
           break;
         default:
+          console.warn('Unknown notification type:', notification.type);
           break;
       }
 
       // Close notification panel
       setIsOpen(false);
+      setError(null);
     } catch (error) {
-      console.error('Error handling notification click:', error);
+      const notificationError = error as NotificationError;
+      console.error('Error handling notification click:', notificationError);
+      setError(notificationError.message || 'Failed to process notification');
     }
   };
 
@@ -98,12 +125,15 @@ const NotificationCenter: React.FC = () => {
         )
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
+      setError(null);
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      const notificationError = error as NotificationError;
+      console.error('Error marking notification as read:', notificationError);
+      setError(notificationError.message || 'Failed to mark notification as read');
     }
   };
 
-  const getNotificationIcon = (type: string) => {
+  const getNotificationIcon = (type: Notification['type']) => {
     switch (type) {
       case 'NEW_MATCH':
         return <Heart className="h-5 w-5 text-pink-500" />;
@@ -138,6 +168,15 @@ const NotificationCenter: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
           </div>
 
+          {error && (
+            <div className="p-4 bg-red-50 border-b border-red-100">
+              <div className="flex items-center text-red-800">
+                <AlertCircle className="h-5 w-5 mr-2" />
+                <p className="text-sm">{error}</p>
+              </div>
+            </div>
+          )}
+
           <div className="max-h-96 overflow-y-auto">
             {notifications.length === 0 ? (
               <div className="p-4 text-center text-gray-500">
@@ -158,7 +197,10 @@ const NotificationCenter: React.FC = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900">
-                        {notification.content}
+                        {notification.content.title}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {notification.content.message}
                       </p>
                       <p className="text-xs text-gray-500">
                         {new Date(notification.created_at).toLocaleString()}

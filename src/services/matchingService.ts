@@ -89,10 +89,10 @@ export const matchingService = {
       if (profileError) throw profileError;
       if (!profile) return null;
 
-      const compatibility = await analyzeCompatibility({
-        user1: { profile, analysis: {} },
-        user2: { profile, analysis: {} }
-      });
+      const compatibility = await analyzeCompatibility(
+        profile,
+        profile
+      );
 
       const smartMatchProfile: SmartMatchProfile = {
         id: profile.id,

@@ -1,3 +1,5 @@
+import type { SmartMatch } from './index';
+
 export interface Profile {
   cupidId: string;
   personalInfo: {
@@ -75,25 +77,6 @@ export interface SmartMatchProfile {
   occupation?: string;
   profile_image?: string | null;
   interests?: string[];
-}
-
-export interface SmartMatch {
-  id?: string;
-  user_id?: string;
-  profile: SmartMatchProfile;
-  compatibility_score: number;
-  compatibility_details: {
-    strengths: string[];
-    challenges: string[];
-    tips: string[];
-    long_term_prediction: string;
-  };
-  request_status?: {
-    persona_view: string;
-    chat: string;
-  };
-  is_favorite?: boolean;
-  last_updated?: string;
 }
 
 export interface CompatibilityInsightsProps {
