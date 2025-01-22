@@ -77,52 +77,40 @@ export interface MatchedProfile extends Profile {
 }
 
 export interface AIPersona {
-  id?: string;
-  user_id: string;
-  personality_traits: {
-    examples: string[];
-  };
-  core_values: {
-    examples: string[];
-  };
-  behavioral_traits: {
-    examples: string[];
-  };
-  hobbies_interests: {
-    examples: string[];
-  };
-  summary: string;
-  created_at?: string;
-  updated_at?: string;
+  id: string;
+  traits: string[];
+  description: string;
 }
 
 export interface UserProfile {
   id: string;
-  cupid_id: string;
   name: string;
-  email: string;
-  gender: string;
   age: number;
-  location: string;
-  bio: string;
-  occupation: string;
-  profile_image: string | null;
-  interests: string[];
-  created_at: string;
-  updated_at: string;
-  visibility_settings: {
-    smart_matching_visible: boolean;
-    profile_image_visible: boolean;
-    occupation_visible: boolean;
-    contact_visible: boolean;
-    master_visibility: boolean;
+  gender: string;
+  email?: string;
+  profile_image?: string;
+  fullname?: string;
+  cupid_id?: string;
+  visibility_settings?: {
+    persona_visible?: boolean;
+    smart_matching_visible?: boolean;
+    profile_visible?: boolean;
   };
-  personalInfo: Record<string, any>;
-  preferences: Record<string, any>;
-  psychologicalProfile: Record<string, any>;
-  relationshipGoals: Record<string, any>;
-  behavioralInsights: Record<string, any>;
-  dealbreakers: Record<string, any>;
+  notification_preferences?: {
+    new_match?: boolean;
+    new_message?: boolean;
+    profile_view?: boolean;
+    email_notifications?: boolean;
+  };
+  personality_traits?: string[];
+  relationship_history?: string;
+  lifestyle?: string;
+  personalInfo?: any;
+  preferences?: any;
+  psychologicalProfile?: any;
+  relationshipGoals?: any;
+  behavioralInsights?: any;
+  dealbreakers?: any;
 }
 
 export interface PersonaTrait {
@@ -139,10 +127,9 @@ export interface NegativePersonaTrait {
 }
 
 export interface PersonaAspect {
+  type: AspectType;
   traits: string[];
-  examples: string[];
-  summary: string | null;
-  intensity?: number;
+  description: string;
 }
 
 export interface PositivePersona {
@@ -153,20 +140,14 @@ export interface PositivePersona {
 }
 
 export interface NegativePersona {
-  emotional_aspects: PersonaAspect;
-  social_aspects: PersonaAspect;
-  lifestyle_aspects: PersonaAspect;
-  relational_aspects: PersonaAspect;
+  id: string;
+  traits: string[];
+  description: string;
 }
 
 export interface PersonaAnalysis {
-  positivePersona: PositivePersona;
-  negativePersona: NegativePersona;
-  preferences?: Record<string, any>;
-  psychological_profile?: Record<string, any>;
-  relationship_goals?: Record<string, any>;
-  behavioral_insights?: Record<string, any>;
-  dealbreakers?: Record<string, any>;
+  id: string;
+  aspects: PersonaAspect[];
 }
 
 export interface MatchRequest {
@@ -237,48 +218,36 @@ export interface RelationshipInsight {
   updated_at: string;
 }
 
-export interface SmartMatchProfile {
-  id: string;
-  user_id: string;
-  cupid_id: string;
-  fullname: string;
-  age: number;
-  location: string;
-  occupation: string;
-  profile_image?: string;
-  gender?: string;
-  relationship_history?: string;
-  lifestyle?: string;
-}
-
 export interface SmartMatch {
   id: string;
   user_id: string;
-  profile: SmartMatchProfile;
+  match_id: string;
   compatibility_score: number;
   compatibility_details: CompatibilityDetails;
-  is_favorite?: boolean;
-  last_updated?: string;
+  profile: SmartMatchProfile;
+  status: string;
+}
+
+export interface SmartMatchProfile extends UserProfile {
+  compatibility_score?: number;
+  match_status?: string;
 }
 
 export interface Message {
   id: string;
-  room_id: string;
-  user_id: string;
+  sender_id: string;
+  receiver_id: string;
   content: string;
-  created_at: string;
-  sender?: {
-    fullname: string;
-    profile_image: string | null;
-  };
+  timestamp: string;
 }
 
 export interface NotificationData {
+  id: string;
   user_id: string;
-  type: 'MATCH_REQUEST' | 'CHAT_REQUEST' | 'PROFILE_VIEW' | 'SYSTEM' | 'NEW_MATCH' | 'NEW_MESSAGE';
-  title: string;
-  message: string;
-  data?: Record<string, unknown>;
+  type: string;
+  content: string;
+  read: boolean;
+  created_at: string;
 }
 
 export interface ChatRoom {
@@ -287,15 +256,7 @@ export interface ChatRoom {
   created_at: string;
 }
 
-export type AspectType = 
-  | 'personality_traits'
-  | 'core_values'
-  | 'behavioral_traits'
-  | 'hobbies_interests'
-  | 'emotional_aspects'
-  | 'social_aspects'
-  | 'lifestyle_aspects'
-  | 'relational_aspects';
+export type AspectType = 'emotional' | 'intellectual' | 'social' | 'behavioral';
 
 export interface PersonaAspectData extends PersonaAspect {
   aspect_type: AspectType;
