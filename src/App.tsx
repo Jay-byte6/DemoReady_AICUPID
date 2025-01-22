@@ -15,11 +15,12 @@ import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import TestPersonalityAnalysis from './components/test/TestPersonalityAnalysis';
 import AIChatAssistant from './components/chat/AIChatAssistant';
+import Pricing from './pages/Pricing';
 import { useLocation } from 'react-router-dom';
 
 const App = () => {
   const location = useLocation();
-  const isPublicPage = ['/', '/login', '/signup'].includes(location.pathname);
+  const isPublicPage = ['/', '/login', '/signup', '/pricing'].includes(location.pathname);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -28,6 +29,7 @@ const App = () => {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/pricing" element={<Pricing />} />
 
         {/* Protected routes with Layout */}
         <Route element={<Layout />}>

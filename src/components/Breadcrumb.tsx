@@ -18,7 +18,8 @@ const routeMap: Record<string, string> = {
   'relationship-insights': 'Relationship Insights',
   'profile': 'Profile',
   'settings': 'Settings',
-  'test-personality': 'Test Personality'
+  'test-personality': 'Test Personality',
+  'pricing': 'Pricing Plans'
 };
 
 const Breadcrumb: React.FC = () => {

@@ -7,7 +7,7 @@ interface AICupidLogoProps {
   size?: number;
 }
 
-const AICupidLogo: React.FC<AICupidLogoProps> = ({ className = '', size = 500 }) => {
+const AICupidLogo: React.FC<AICupidLogoProps> = ({ className = '', size = 550 }) => {
   return (
     <div className={`relative ${className}`} style={{ width: size, height: size }}>
       {/* Main AI CUPID logo */}

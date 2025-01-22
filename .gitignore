@@ -35,3 +35,9 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw?
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo

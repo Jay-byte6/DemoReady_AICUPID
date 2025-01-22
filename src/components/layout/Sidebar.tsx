@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Brain, Heart, Sparkles, Settings, LogOut, MessageCircle } from 'lucide-react';
+import { Brain, Heart, Sparkles, Settings, LogOut, MessageCircle, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import AICupidLogo from '../../assets/AICupidLogo';
 
@@ -23,6 +23,12 @@ const Sidebar = () => {
   };
 
   const menuItems = [
+    {
+      path: '/profile',
+      name: 'Your Persona',
+      icon: User,
+      onClick: undefined,
+    },
     {
       path: '/personality-analysis',
       name: 'Personality Analysis',
@@ -57,7 +63,7 @@ const Sidebar = () => {
       <motion.div
         initial={{ x: -250 }}
         animate={{ x: 0 }}
-        className="w-64 h-screen bg-gradient-to-b from-purple-900 via-pink-900 to-rose-900 fixed left-0 top-0 z-20 shadow-xl"
+        className="w-64 h-[calc(100vh-4rem)] bg-gradient-to-b from-purple-900 via-pink-900 to-rose-900 fixed left-0 top-16 z-0 shadow-xl overflow-y-auto"
       >
         <div className="flex flex-col h-full">
           <div className="p-6 border-b border-white/10">
@@ -69,7 +75,7 @@ const Sidebar = () => {
             </div>
           </div>
 
-          <div className="flex-1 py- flex flex-col gap-1">
+          <div className="flex-1 py-2 flex flex-col gap-1">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;

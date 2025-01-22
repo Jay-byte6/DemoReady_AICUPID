@@ -112,9 +112,9 @@ const Profile = () => {
                   )}
                 </div>
                 {aspect.examples[index] && (
-                  <div className="mt-6">
-                    <span className="text-3xl font-semibold text-pink-500">Example:</span>
-                    <p className="text-3xl text-gray-700 leading-relaxed mt-3">
+                  <div className="mt-8">
+                    <span className="text-5xl font-semibold text-pink-500">Example:</span>
+                    <p className="text-5xl text-gray-700 leading-relaxed mt-5">
                       {aspect.examples[index]}
                     </p>
                   </div>
@@ -123,7 +123,7 @@ const Profile = () => {
             ))}
             {aspect.summary && (
               <div className="bg-pink-50 p-8 rounded-lg border border-pink-100 shadow-md">
-                <p className="text-3xl text-gray-700 leading-relaxed italic">
+                <p className="text-5xl text-gray-700 leading-relaxed italic">
                   {aspect.summary}
                 </p>
               </div>

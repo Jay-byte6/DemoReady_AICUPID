@@ -75,7 +75,7 @@ const MatchGrid: React.FC<Props> = ({
                     {match.profile.fullname || 'Anonymous'}
                   </h3>
                   <p className="text-white/90 text-sm">
-                    CUPID ID: {match.profile.cupid_id}
+                     {match.profile.cupid_id}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

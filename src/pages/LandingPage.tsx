@@ -187,8 +187,8 @@ const LandingPage: React.FC = () => {
               transition={{ delay: 0.2 }}
               className="mb-12"
             >
-              <h1 className="text-4xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-300 bg-clip-text text-transparent">
-                Find Your Perfect Match
+              <h1 className="text-5xl md:text-6xl font-bold mb-4 bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-300 bg-clip-text text-transparent">
+               Revolutionize Love with AI Cupid
               </h1>
               <p className="text-lg md:text-xl text-gray-300">
                 Discover meaningful connections through AI-powered matchmaking

@@ -35,7 +35,7 @@ const Navbar = () => {
 
   return (
     <>
-      <nav className="bg-white shadow-sm">
+      <nav className="bg-white shadow-sm fixed top-0 left-0 right-0 z-20">
         <div className="container mx-auto px-4">
           <div className="flex justify-between h-16">
             <div className="flex items-center space-x-8">
@@ -57,6 +57,12 @@ const Navbar = () => {
               >
                 Contact Us
               </Link>
+              <Link
+                to="/pricing"
+                className="text-gray-700 hover:text-pink-500 px-3 py-2 rounded-md text-base font-semibold transition-colors"
+              >
+                Pricing
+              </Link>
             </div>
 
             <div className="flex items-center">
@@ -71,46 +77,56 @@ const Navbar = () => {
 
                   <NotificationCenter />
 
-                  <div className="relative" ref={menuRef}>
-                    <button
-                      onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                      className="flex items-center text-gray-700 hover:text-pink-500 px-3 py-2 transition-colors"
-                    >
-                      <UserCircle className="w-6 h-6" />
-                    </button>
-
-                    {isProfileMenuOpen && (
-                      <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
-                        <Link
-                          to="/profile"
-                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-500 transition-colors"
-                          onClick={() => setIsProfileMenuOpen(false)}
-                        >
-                          My Profile
-                        </Link>
-                        <button
-                          onClick={async () => {
-                            setIsProfileMenuOpen(false);
-                            try {
-                              await profileService.generateAndStorePersonaAnalysis(user.id, true, 'MANUAL');
-                              navigate('/profile');
-                            } catch (error) {
-                              console.error('Error generating persona:', error);
-                            }
-                          }}
-                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-500 transition-colors"
-                        >
-                          Generate Persona
-                        </button>
-                        <Link
-                          to="/settings"
-                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-500 transition-colors"
-                          onClick={() => setIsProfileMenuOpen(false)}
-                        >
-                          Settings
-                        </Link>
+                  <div className="flex items-center gap-2">
+                    <div className="text-right mr-2">
+                      <div className="text-sm font-medium text-gray-700">
+                        {user?.user_metadata?.fullName || 'Ajay Devan'}
                       </div>
-                    )}
+                      <div className="text-xs text-gray-500">
+                        {user?.user_metadata?.cupidId || 'CUPID-151FDD'}
+                      </div>
+                    </div>
+                    <div className="relative" ref={menuRef}>
+                      <button
+                        onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                        className="flex items-center text-gray-700 hover:text-pink-500 px-3 py-2 transition-colors"
+                      >
+                        <UserCircle className="w-6 h-6" />
+                      </button>
+
+                      {isProfileMenuOpen && (
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-10">
+                          <Link
+                            to="/profile"
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-500 transition-colors"
+                            onClick={() => setIsProfileMenuOpen(false)}
+                          >
+                            My Profile
+                          </Link>
+                          <button
+                            onClick={async () => {
+                              setIsProfileMenuOpen(false);
+                              try {
+                                await profileService.generateAndStorePersonaAnalysis(user.id, true, 'MANUAL');
+                                navigate('/profile');
+                              } catch (error) {
+                                console.error('Error generating persona:', error);
+                              }
+                            }}
+                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-500 transition-colors"
+                          >
+                            Generate Persona
+                          </button>
+                          <Link
+                            to="/settings"
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-pink-50 hover:text-pink-500 transition-colors"
+                            onClick={() => setIsProfileMenuOpen(false)}
+                          >
+                            Settings
+                          </Link>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </>
               ) : (
